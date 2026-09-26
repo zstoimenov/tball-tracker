@@ -26,6 +26,8 @@ export const ICON = {
   phone: svg('<rect x="6" y="2" width="12" height="20" rx="3"/><path d="M11 18h2"/>'),
   shield: svg('<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/>'),
   upload: svg('<path d="M12 15V3"/><path d="M8 7l4-4 4 4"/><path d="M4 19h16"/>'),
+  grip: svg('<circle cx="9" cy="6" r="1.3" fill="currentColor"/><circle cx="15" cy="6" r="1.3" fill="currentColor"/><circle cx="9" cy="12" r="1.3" fill="currentColor"/><circle cx="15" cy="12" r="1.3" fill="currentColor"/><circle cx="9" cy="18" r="1.3" fill="currentColor"/><circle cx="15" cy="18" r="1.3" fill="currentColor"/>'),
+  lock: svg('<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>'),
   zoom: svg('<circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5M11 8v6M8 11h6"/>'),
   ball: svg('<circle cx="12" cy="12" r="9"/><path d="M6 5.5c2 2 2.5 4 2.5 6.5S8 16.5 6 18.5M18 5.5c-2 2-2.5 4-2.5 6.5s.5 4.5 2.5 6.5"/>'),
 };

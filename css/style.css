@@ -237,13 +237,25 @@ main.score { padding-top: 12px; }
   display: flex; align-items: center; gap: 4px;
   background: var(--surface); border-radius: 14px; box-shadow: var(--shadow);
   padding: 4px 6px 4px 8px; margin-bottom: 6px;
-  animation: rise .2s ease both;
 }
 .players .num {
   width: 30px; height: 30px; flex: none; display: grid; place-items: center;
   border-radius: 9px; background: var(--hero); color: var(--hero-ink); font-weight: 800; font-size: 14px;
 }
 .players .input { flex: 1; min-width: 0; }
+.players li { position: relative; transition: transform .18s ease; }
+.players.sorting li { transition: transform .18s ease; }
+.players li.dragging { transition: none; z-index: 5; box-shadow: 0 14px 30px rgba(11, 18, 32, .25); transform-origin: center; }
+.players li.dragging .num { background: var(--accent); color: var(--accent-ink); }
+.grip {
+  flex: none; width: 44px; height: 44px; display: grid; place-items: center;
+  color: var(--muted); cursor: grab; touch-action: none; border-radius: 10px;
+}
+.grip:active { cursor: grabbing; background: var(--surface-2); }
+.grip.off { cursor: default; opacity: .45; }
+.grip.off svg { width: 16px; height: 16px; }
+.hint-line { display: block; margin: 0 4px 8px; font-size: 13px; color: var(--muted); }
+.hint-line svg { width: 16px; height: 16px; vertical-align: -3px; }
 
 .stepper-row { display: flex; align-items: center; gap: 12px; }
 .stepper-row > div:first-child { flex: 1; }

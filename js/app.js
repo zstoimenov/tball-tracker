@@ -287,6 +287,7 @@ ACTIONS.new = () => {
       { name: '', color: COLORS[1], players: [] },
     ],
     locked: [0, 0],
+    full: [false, false],
   };
   draft.preset = presetOf(draft);
   go('setup');
@@ -304,8 +305,12 @@ ACTIONS.editGame = () => {
     maxBatters: game.maxBatters,
     strikeouts: game.strikeouts ?? true,
     teams: game.teams.map((t, i) => ({ name: t.name, color: t.color || COLORS[i], players: [...t.players] })),
-    // Events refer to batting positions, so existing players can be renamed but not removed.
-    locked: game.events.length ? game.teams.map((t) => t.players.length) : [0, 0],
+    // Events refer to batting positions, so players who have batted keep
+    // their spot (they can still be renamed). Batting runs 1, 2, 3… so
+    // they are always the first `bats` positions. Once the whole lineup
+    // has batted, adding players would change who batted earlier.
+    locked: game.teams.map((t, i) => Math.min(replay(game).teams[i].bats, t.players.length)),
+    full: game.teams.map((t, i) => replay(game).teams[i].bats >= t.players.length),
   };
   draft.preset = presetOf(draft);
   go('setup');
@@ -366,18 +371,19 @@ function setupPlayers() {
       <button class="${k === i ? 'on' : ''}" data-action="tab" data-t="${k}" style="--team:${tm.color}">
         <i></i>${esc(tm.name || (k ? 'Team 2' : 'Team 1'))} <small>${tm.players.length}</small></button>`).join('')}
     </div>
-    <div class="add-row">
+    ${draft.full[i] ? `<p class="hint-line">${ICON.lock} The whole lineup has batted, so no more players can be added to this game.</p>` : `<div class="add-row">
       <input class="input" id="new-player" placeholder="Name (optional)" autocomplete="off" enterkeyhint="done" maxlength="24">
       <button class="btn primary" data-action="addPlayer">${ICON.plus}<span class="sr">Add</span></button>
-    </div>
-    <ol class="players">
+    </div>`}
+    ${t.players.length > 1 ? `<p class="hint-line">${locked ? 'Players who have already batted keep their spot. ' : ''}Drag ${ICON.grip} to change the batting order.</p>` : ''}
+    <ol class="players" id="players">
       ${t.players.map((p, k) => `
-        <li>
+        <li data-k="${k}" class="${k < locked ? 'locked' : ''}">
           <span class="num">${k + 1}</span>
           <input class="input bare" data-bind="player:${i}:${k}" value="${esc(p)}" placeholder="#${k + 1}" aria-label="Player ${k + 1} name" maxlength="24">
-          <button class="icon-btn sm" data-action="movePlayer" data-k="${k}" data-d="-1" ${k === 0 || k < locked ? 'disabled' : ''} aria-label="Move up">${ICON.up}</button>
-          <button class="icon-btn sm" data-action="movePlayer" data-k="${k}" data-d="1" ${k === t.players.length - 1 || k < locked ? 'disabled' : ''} aria-label="Move down">${ICON.down}</button>
           <button class="icon-btn sm" data-action="removePlayer" data-k="${k}" ${k < locked ? 'disabled' : ''} aria-label="Remove">${ICON.x}</button>
+          ${k < locked ? `<span class="grip off" aria-hidden="true">${ICON.lock}</span>`
+            : `<span class="grip" data-grip="${k}" role="button" aria-label="Drag to reorder ${esc(p || `player ${k + 1}`)}">${ICON.grip}</span>`}
         </li>`).join('')}
     </ol>
     ${t.players.length ? '' : `<div class="empty small"><p>No players yet.</p>
@@ -426,6 +432,7 @@ function bindSetupInputs() {
       else draft[k] = el.value;
     }),
   );
+  bindPlayerDrag();
   const np = document.getElementById('new-player');
   np?.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); ACTIONS.addPlayer(); } });
 }
@@ -456,13 +463,70 @@ ACTIONS.quickFill = () => {
   for (let k = 1; k <= 9; k++) t.players.push('');
   renderSetup();
 };
-ACTIONS.movePlayer = (el) => {
-  const ps = draft.teams[draft.tab].players;
-  const k = +el.dataset.k;
-  const j = k + +el.dataset.d;
-  [ps[k], ps[j]] = [ps[j], ps[k]];
-  renderSetup();
-};
+// Drag and drop reordering (pointer events, so it works with touch).
+// Rows below the dragged one slide to show where it will land.
+function bindPlayerDrag() {
+  const list = document.getElementById('players');
+  if (!list) return;
+  list.addEventListener('pointerdown', (e) => {
+    const grip = e.target.closest('[data-grip]');
+    if (!grip) return;
+    e.preventDefault();
+    document.activeElement?.blur?.();
+    const rows = [...list.children];
+    const from = +grip.dataset.grip;
+    const row = rows[from];
+    const min = draft.locked[draft.tab];
+    const pitch = rows.length > 1 ? rows[1].getBoundingClientRect().top - rows[0].getBoundingClientRect().top : row.offsetHeight;
+    const startY = e.pageY;
+    let to = from;
+    let lastY = e.clientY;
+    let raf = 0;
+    grip.setPointerCapture(e.pointerId);
+    row.classList.add('dragging');
+    list.classList.add('sorting');
+    buzz(8);
+
+    const update = () => {
+      const dy = lastY + window.scrollY - startY;
+      row.style.transform = `translateY(${dy}px)`;
+      to = Math.max(min, Math.min(rows.length - 1, from + Math.round(dy / pitch)));
+      rows.forEach((r, k) => {
+        if (r === row) return;
+        let shift = 0;
+        if (from < to && k > from && k <= to) shift = -pitch;
+        if (from > to && k >= to && k < from) shift = pitch;
+        r.style.transform = shift ? `translateY(${shift}px)` : '';
+      });
+    };
+    // Scroll the page while dragging near the top or bottom edge.
+    const edgeScroll = () => {
+      const edge = 90;
+      const bottom = window.innerHeight - 110;
+      const v = lastY < edge ? -(edge - lastY) / 6 : lastY > bottom ? (lastY - bottom) / 6 : 0;
+      if (v) { window.scrollBy(0, v); update(); }
+      raf = requestAnimationFrame(edgeScroll);
+    };
+    raf = requestAnimationFrame(edgeScroll);
+
+    const move = (ev) => { lastY = ev.clientY; update(); };
+    const done = () => {
+      cancelAnimationFrame(raf);
+      grip.removeEventListener('pointermove', move);
+      grip.removeEventListener('pointerup', done);
+      grip.removeEventListener('pointercancel', done);
+      if (to !== from) {
+        const ps = draft.teams[draft.tab].players;
+        ps.splice(to, 0, ps.splice(from, 1)[0]);
+        buzz(10);
+      }
+      renderSetup();
+    };
+    grip.addEventListener('pointermove', move);
+    grip.addEventListener('pointerup', done);
+    grip.addEventListener('pointercancel', done);
+  });
+}
 ACTIONS.removePlayer = (el) => { draft.teams[draft.tab].players.splice(+el.dataset.k, 1); renderSetup(); };
 ACTIONS.innings = (el) => { draft.innings += +el.dataset.d; renderSetup(); };
 ACTIONS.strikeouts = (el) => { draft.strikeouts = el.checked; };

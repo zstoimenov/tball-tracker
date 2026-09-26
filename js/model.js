@@ -40,6 +40,7 @@ export function replay(game) {
     cells: {}, // key "inning:player" -> cell
     runs: [], // runs per innings
     next: 0, // next batter index
+    bats: 0, // plate appearances so far
     breaks: [], // {inning, player}: diagonal marking first batter of next innings
   }));
   const s = {
@@ -95,6 +96,7 @@ function apply(game, s, ev) {
 
   if (ev.t === 'bat') {
     const p = T.next;
+    T.bats++;
     T.next = (T.next + 1) % game.teams[team].players.length;
     s.batters++;
     cellOf(s, team, inning, p);
