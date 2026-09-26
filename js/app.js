@@ -11,15 +11,15 @@ const BASE = ['Home', '1st', '2nd', '3rd', 'Home'];
 const COLORS = ['#3b82f6', '#e5484d', '#16a34a', '#f59e0b', '#8b5cf6', '#ec4899', '#0ea5e9', '#f97316', '#334155'];
 
 const HITS = [
-  { r: 1, label: '1st base', hint: 'Ran to 1st' },
-  { r: 2, label: '2nd base', hint: 'Ran to 2nd' },
-  { r: 3, label: '3rd base', hint: 'Ran to 3rd' },
-  { r: 4, label: 'Home run', hint: 'All the way' },
+  { r: 1, label: '1st' },
+  { r: 2, label: '2nd' },
+  { r: 3, label: '3rd' },
+  { r: 4, label: 'Home run' },
 ];
 const OUTS = [
   { r: 'K', label: 'Struck out', hint: '3 strikes', glyph: 'K' },
-  { r: 'C', label: 'Caught', hint: 'Ball caught in the air', glyph: 'C' },
-  { r: 'T', label: 'Tagged / thrown out', hint: "Didn't beat the ball to base", glyph: 'T' },
+  { r: 'C', label: 'Caught', hint: 'In the air', glyph: 'C' },
+  { r: 'T', label: 'Tagged out', hint: 'Beaten to base', glyph: 'T' },
 ];
 const RULES = [
   { key: '3:9', title: '3 outs or 9 batters', text: 'Most junior leagues. Whichever comes first.' },
@@ -540,39 +540,38 @@ function undo() {
 }
 
 function coachTip(ph, bt) {
-  if (!tips) return '';
+  if (!tips || state.half >= 2) return '';
   const name = esc(playerName(bt, state.teams[bt].next));
   const text = {
     bat: game.events.length === 0
-      ? `Game on! Each time a player bats, tap what happened. Made a mistake? Tap <b>Undo</b>.`
-      : `Watch <b>${name}</b> hit, then tap where they ended up, or how they got out.`,
-    runners: 'Runners who had to move already have. Did anyone run further, or get out? Tap them on the diamond. Otherwise tap <b>Next batter</b>.',
+      ? 'Tap where the batter got to, or how they got out.'
+      : `Tap where <b>${name}</b> got to, or how they got out.`,
+    runners: 'Tap a runner on the diamond if they ran further or got out.',
     inningsOver: 'Tell the umpire, then swap: the other team bats now.',
     over: 'Get the umpire to check and sign the scoresheet, then share it.',
   }[ph];
-  return `<div class="tip">${ICON.bulb}<p>${text}</p><button class="icon-btn sm" data-action="hideTips" aria-label="Hide tips">${ICON.x}</button></div>`;
+  return `<div class="coach">${ICON.bulb}<p>${text}</p><button class="icon-btn sm" data-action="hideTips" aria-label="Hide tips">${ICON.x}</button></div>`;
 }
 
 function hero(bt) {
-  const inn = currentInning(state);
   const limit = batterLimit(game, bt);
-  const outsDots = game.maxOuts
+  const dots = game.maxOuts
     ? Array.from({ length: game.maxOuts }, (_, k) => `<i class="${k < state.outs ? 'on' : ''}"></i>`).join('')
     : `<b>${state.outs}</b>`;
+  const team = (i) => {
+    const t = game.teams[i];
+    const on = !state.over && i === bt;
+    return `<div class="sb-team ${on ? 'batting' : ''}" style="--team:${t.color || COLORS[i]}">
+      <span class="sb-name">${esc(t.name)}</span>${on ? '<small>Batting</small>' : ''}<b class="sb-runs">${total(state.teams[i].runs)}</b></div>`;
+  };
   return `
     <section class="scoreboard">
-      ${game.teams.map((t, i) => `
-        <div class="sb-row ${!state.over && i === bt ? 'batting' : ''}" style="--team:${t.color || COLORS[i]}">
-          <i class="sb-color"></i><span class="sb-name">${esc(t.name)}</span>
-          ${!state.over && i === bt ? '<span class="sb-bat">Batting</span>' : ''}
-          <b class="sb-runs">${total(state.teams[i].runs)}</b>
-        </div>`).join('')}
+      <div class="sb-teams">${team(0)}${team(1)}</div>
       ${state.over ? '' : `
-      <div class="sb-meta">
-        <div><small>Innings</small><b>${inn + 1}<em>/${game.innings}</em></b></div>
-        <div><small>Outs</small><span class="outs">${outsDots}</span></div>
-        <div><small>Batted</small><b>${state.batters}<em>/${limit}</em></b></div>
-        <div><small>Runs</small><b>${state.teams[bt].runs[inn] || 0}</b></div>
+      <div class="sb-strip">
+        <span>Innings <b>${currentInning(state) + 1}</b>/${game.innings}</span>
+        <span class="sb-outs">Outs <span class="out-dots">${dots}</span></span>
+        <span>Batted <b>${state.batters}</b>/${limit}</span>
       </div>`}
     </section>`;
 }
@@ -652,13 +651,15 @@ function panel(ph, bt) {
     const p = state.teams[bt].next;
     return `
       <section class="panel">
-        <div class="panel-head"><small>Up to bat · #${p + 1}</small><h2>${esc(playerName(bt, p))}</h2></div>
-        <h3 class="group safe-t">Safe: where did they get to?</h3>
-        <div class="plays">${HITS.map((h) => `
-          <button class="play safe" data-action="bat" data-r="${h.r}">${miniDiamond(h.r)}<b>${h.label}</b><small>${h.hint}</small></button>`).join('')}
+        <div class="batter-row"><span class="num-badge" style="--team:${game.teams[bt].color || COLORS[bt]}">${p + 1}</span>
+          <div><small>Up to bat</small><h2>${esc(playerName(bt, p))}</h2></div></div>
+        ${coachTip(ph, bt)}
+        <h3 class="group safe-t">Safe on</h3>
+        <div class="plays hits">${HITS.map((h) => `
+          <button class="play safe" data-action="bat" data-r="${h.r}">${miniDiamond(h.r)}<b>${h.label}</b></button>`).join('')}
         </div>
-        <h3 class="group out-t">Out: how?</h3>
-        <div class="plays outs">${OUTS.map((o) => `
+        <h3 class="group out-t">Out</h3>
+        <div class="plays outplays">${OUTS.map((o) => `
           <button class="play out" data-action="bat" data-r="${o.r}"><span class="glyph">${o.glyph}</span><b>${o.label}</b><small>${o.hint}</small></button>`).join('')}
         </div>
       </section>`;
@@ -668,7 +669,8 @@ function panel(ph, bt) {
     const next = state.teams[bt].next;
     return `
       <section class="panel">
-        <div class="panel-head"><small>Any runners go further?</small><h2>Tap a runner above to move them</h2></div>
+        <div class="panel-head"><small>After the play</small><h2>Any runners go further?</h2></div>
+        ${coachTip(ph, bt)}
         <button class="btn primary big" data-action="next">${reason ? 'Done: end of innings' : `Next batter: ${esc(shortName(bt, next))}`} ${ICON.chevron}</button>
       </section>`;
   }
@@ -680,7 +682,7 @@ function panel(ph, bt) {
       <section class="panel alert">
         ${ICON.whistle}
         <div class="panel-head"><small>${esc(reason)}</small><h2>Innings over</h2></div>
-        <p>Tell the umpire. ${game.teams[bt].name} scored <b>${state.teams[bt].runs[currentInning(state)] || 0}</b> this innings.</p>
+        <p>Tell the umpire. ${esc(game.teams[bt].name)} scored <b>${state.teams[bt].runs[currentInning(state)] || 0}</b> this innings.</p>
         <button class="btn primary big" data-action="endHalf">${lastHalf ? 'Finish the game' : `${esc(game.teams[nt].name)} bat next`} ${ICON.chevron}</button>
       </section>`;
   }
@@ -707,7 +709,6 @@ function renderScore() {
       right: `${helpBtn}<button class="icon-btn" data-action="menu" aria-label="More">${ICON.more}</button>` })}
     ${hero(bt)}
     <main class="score">
-      ${coachTip(ph, bt)}
       ${state.over ? '' : diamond(bt, ph)}
       ${panel(ph, bt)}
       <section class="card sheet-card ${sheetOpen ? 'open' : ''}" id="sheet-card">
@@ -1039,6 +1040,11 @@ ACTIONS.share = async () => {
 ACTIONS.download = () => sheetFile && download();
 
 // ---------- boot ----------
+// No OS text-selection / long-press callouts, except where typing.
+document.addEventListener('contextmenu', (e) => {
+  if (!e.target.closest('input, textarea')) e.preventDefault();
+});
+
 function fmtDate(d) {
   try { return new Date(d + 'T00:00').toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' }); }
   catch { return d; }
