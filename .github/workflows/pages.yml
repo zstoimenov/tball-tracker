@@ -2,7 +2,7 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [main, claude/tee-ball-result-tracker-gvwvuv]
+    branches: [main]
   workflow_dispatch:
 
 permissions:

@@ -1,8 +1,8 @@
 // Offline support: cache the app shell, serve cache first, refresh in background.
-const CACHE = 'tball-v1';
+const CACHE = 'tball-v3';
 const SHELL = [
-  './', 'index.html', 'css/style.css', 'js/app.js', 'js/model.js', 'js/draw.js',
-  'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png',
+  './', 'index.html', 'css/style.css', 'js/app.js', 'js/model.js', 'js/draw.js', 'js/ui.js', 'js/storage.js',
+  'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png',
 ];
 
 self.addEventListener('install', (e) => {

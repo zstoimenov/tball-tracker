@@ -143,7 +143,7 @@ function apply(game, s, ev) {
 
 // Why the current half should end, or null.
 export function halfDone(game, s) {
-  if (game.maxOuts > 0 && s.outs >= game.maxOuts) return game.maxOuts + ' out';
+  if (game.maxOuts > 0 && s.outs >= game.maxOuts) return game.maxOuts + (game.maxOuts === 1 ? ' out' : ' outs');
   if (s.batters >= batterLimit(game, battingTeam(s))) return s.batters + ' players have batted';
   return null;
 }

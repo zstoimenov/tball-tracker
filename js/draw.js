@@ -22,7 +22,7 @@ export function gridSize(game, team) {
 // runner goes home -> 1st (right) -> 2nd (top) -> 3rd (left) -> home.
 const angle = (base) => Math.PI / 2 - base * (Math.PI / 2);
 
-function drawCell(ctx, x, y, S, cell, hi) {
+export function drawCell(ctx, x, y, S, cell, hi) {
   const cx = x + S / 2;
   const cy = y + S / 2;
   const r = S * 0.3;
@@ -122,7 +122,16 @@ export function drawGrid(ctx, x, y, game, state, team, hi) {
   ctx.fillStyle = INK;
   ctx.textAlign = 'left';
   ctx.font = `bold 17px ${FONT}`;
-  ctx.fillText(fitText(ctx, T.name, W - 60), x, y + L.title / 2 - 2);
+  // Team colour chip before the name.
+  const sw = T.color ? 16 : 0;
+  if (sw) {
+    ctx.fillStyle = T.color;
+    ctx.beginPath();
+    ctx.roundRect(x, y + L.title / 2 - 9, 12, 14, 3);
+    ctx.fill();
+    ctx.fillStyle = INK;
+  }
+  ctx.fillText(fitText(ctx, T.name, W - 60 - sw), x + sw, y + L.title / 2 - 2);
   ctx.textAlign = 'right';
   ctx.fillText(String(total(TS.runs)), x + W, y + L.title / 2 - 2);
 

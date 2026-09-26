@@ -1,15 +1,24 @@
 {
+  "id": "./",
   "name": "Tee-ball Tracker",
   "short_name": "Tee-ball",
   "description": "Score tee-ball games on the classic paper scoresheet and share the result.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#f4f5f2",
-  "theme_color": "#1f6f43",
+  "orientation": "portrait",
+  "background_color": "#0b1220",
+  "theme_color": "#0b1220",
+  "categories": ["sports", "utilities"],
   "icons": [
-    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
     { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ],
+  "screenshots": [
+    { "src": "icons/screens/scoring.png", "sizes": "780x1688", "type": "image/png", "form_factor": "narrow", "label": "Score each batter with a tap" },
+    { "src": "icons/screens/runners.png", "sizes": "780x1688", "type": "image/png", "form_factor": "narrow", "label": "Move runners on the diamond" },
+    { "src": "icons/screens/setup.png", "sizes": "780x1688", "type": "image/png", "form_factor": "narrow", "label": "Set up a game in under a minute" }
   ]
 }
