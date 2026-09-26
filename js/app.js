@@ -594,11 +594,11 @@ function diamond(bt, ph) {
     const p = state.runners[b];
     if (p == null) continue;
     chips.push(`<button class="chip ${game.teams[bt].players[p] ? '' : 'num-only'} ${selected === p ? 'sel' : ''} ${p === moved ? 'pop' : ''}" style="left:${POS[b][0]}%;top:${POS[b][1]}%;--team:${color}"
-      data-action="pick" data-p="${p}" ${runOk ? '' : 'disabled'}><span>${p + 1}</span>${esc(game.teams[bt].players[p] ? shortName(bt, p) : '')}</button>`);
+      data-action="pick" data-p="${p}" ${runOk ? '' : 'disabled'}><span>${p + 1}</span>${game.teams[bt].players[p] ? `<em>${esc(shortName(bt, p))}</em>` : ''}</button>`);
   }
   if (ph === 'bat') {
     const p = state.teams[bt].next;
-    chips.push(`<div class="chip batter ${game.teams[bt].players[p] ? '' : 'num-only'}" style="left:${POS[0][0]}%;top:${POS[0][1]}%;--team:${color}"><span>${p + 1}</span>${esc(game.teams[bt].players[p] ? shortName(bt, p) : '')}</div>`);
+    chips.push(`<div class="chip batter ${game.teams[bt].players[p] ? '' : 'num-only'}" style="left:${POS[0][0]}%;top:${POS[0][1]}%;--team:${color}"><span>${p + 1}</span>${game.teams[bt].players[p] ? `<em>${esc(shortName(bt, p))}</em>` : ''}</div>`);
   }
   const base = (b, x, y) => `<g class="base ${targets.has(b) ? 'target' : ''}" ${targets.has(b) ? `data-action="moveTo" data-to="${b || 4}"` : ''}>
       <circle cx="${x}" cy="${y}" r="26" class="hit"/>
@@ -702,10 +702,9 @@ function renderScore() {
   const ph = phase();
   if (!gridPinned) gridTeam = state.over ? 0 : bt;
   if (selected != null && !state.runners.includes(selected)) selected = null;
-  const sub = state.over ? 'Final' : `${esc(game.teams[bt].name)} batting`;
 
   app.innerHTML = `
-    ${topBar({ back: 'home', title: state.over ? 'Game over' : `Innings ${currentInning(state) + 1} of ${game.innings}`, sub,
+    ${topBar({ back: 'home', title: state.over ? 'Game over' : `Innings ${currentInning(state) + 1} of ${game.innings}`,
       right: `${helpBtn}<button class="icon-btn" data-action="menu" aria-label="More">${ICON.more}</button>` })}
     ${hero(bt)}
     <main class="score">

@@ -174,23 +174,31 @@ export function drawGrid(ctx, x, y, game, state, team, hi) {
     }
   }
 
-  // Lines marking who bats first in the next innings.
+  // Lines marking who bats first in the next innings, as on the paper
+  // sheet: a diagonal across the next batter's unused box in the finished
+  // innings, joined to a horizontal line along the top of that batter's
+  // row in the next innings column (or past the grid after the last one).
   ctx.strokeStyle = INK;
   ctx.lineWidth = 3;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
   for (const b of TS.breaks) {
     if (b.inning >= game.innings) continue;
     const bx = gx + b.inning * S;
     const by = rowsTop + b.player * S;
+    const end = b.inning + 1 < game.innings ? bx + 2 * S : bx + S + 12;
     ctx.beginPath();
     if (!TS.cells[b.inning + ':' + b.player]) {
       ctx.moveTo(bx, by + S);
-      ctx.lineTo(bx + S + 12, by - 4);
+      ctx.lineTo(bx + S, by);
     } else {
-      ctx.moveTo(bx, by);
-      ctx.lineTo(bx + S + 12, by);
+      // Box already used (whole lineup batted): no room for the diagonal.
+      ctx.moveTo(bx + S, by);
     }
+    ctx.lineTo(end, by);
     ctx.stroke();
   }
+  ctx.lineCap = 'butt';
 
   // Totals: innings runs top-left, running total bottom-right.
   const ty = rowsTop + n * S;

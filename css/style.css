@@ -335,6 +335,7 @@ main.score { padding-top: 12px; }
   transition: transform .15s;
 }
 .chip.num-only { padding-right: 5px; }
+.chip em { font-style: normal; }
 .chip span { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: rgba(0, 0, 0, .25); font-size: 12px; }
 .chip.sel { transform: translate(-50%, -50%) scale(1.12); box-shadow: 0 0 0 4px var(--accent), 0 8px 18px rgba(0, 0, 0, .4); }
 .chip.pop { animation: pop .35s ease; }
@@ -500,4 +501,51 @@ main.score { padding-top: 12px; }
 @keyframes pulse { 50% { opacity: .55; } }
 @keyframes fade { from { opacity: 0; } }
 @keyframes slide { from { transform: translateY(100%); } }
+/* ---------- short screens (small phones) ---------- */
+@media (max-height: 760px) {
+  .top { padding-top: calc(env(safe-area-inset-top) + 4px); padding-bottom: 4px; }
+  .scoreboard { padding: 0 12px 8px; border-radius: 0 0 20px 20px; }
+  .sb-teams { grid-template-columns: 1fr 1fr; gap: 6px; }
+  .sb-team { padding: 4px 8px; gap: 6px; }
+  .sb-team:nth-child(2) { flex-direction: row-reverse; border-left: 0; border-right: 5px solid var(--team); text-align: right; }
+  .sb-team small { display: none; }
+  .sb-team.batting { box-shadow: inset 0 -3px 0 var(--accent); }
+  .sb-name { font-size: 14px; }
+  .sb-runs { font-size: 24px; min-width: 0; }
+  .sb-strip { margin-top: 5px; font-size: 12px; }
+  .sb-strip b { font-size: 14px; }
+  main.score { padding-top: 8px; }
+  .field-card { padding: 4px 6px; border-radius: 18px; margin-bottom: 8px; }
+  .field { max-width: calc(21vh * 1.2); }
+  /* Number-only runner chips so they never cover the bases. */
+  .chip, .chip.num-only { padding: 2px; }
+  .chip em { display: none; }
+  .chip span { width: 26px; height: 26px; font-size: 13px; background: none; }
+  .panel { padding: 10px; border-radius: 18px; margin-bottom: 8px; }
+  .batter-row { gap: 10px; margin-bottom: 6px; }
+  .num-badge { width: 34px; height: 34px; border-radius: 11px; font-size: 16px; }
+  .batter-row h2 { font-size: 19px; }
+  .batter-row small { font-size: 10px; }
+  .coach { padding: 4px 2px 4px 8px; font-size: 12px; }
+  .coach > svg { width: 15px; height: 15px; }
+  .coach .icon-btn { width: 26px; height: 26px; }
+  .group { margin: 7px 2px 4px; font-size: 11px; }
+  .plays { gap: 6px; }
+  .play { min-height: 50px; padding: 5px 2px; gap: 2px; border-radius: 13px; }
+  .play b { font-size: 14px; }
+  .play small { font-size: 10px; }
+  .play .glyph { width: 22px; height: 22px; font-size: 12px; }
+  .mini { width: 22px; height: 22px; }
+  .panel-head h2 { font-size: 19px; margin-bottom: 8px; }
+  .btn.big { min-height: 50px; }
+  .bottom-bar { padding-top: 3px; padding-bottom: calc(env(safe-area-inset-bottom) + 3px); }
+  .bottom-bar button { padding: 5px 4px; }
+}
+@media (max-height: 600px) {
+  .plays.hits .play b { font-size: 13px; }
+  .play small { display: none; }
+  .play { min-height: 44px; }
+  .field { max-width: calc(16vh * 1.2); }
+}
+
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
