@@ -25,7 +25,7 @@ export function gridSize(game, team, lay = L) {
   const rows = game.teams[team].players.length;
   return {
     w: lay.num + lay.name + game.innings * lay.S + OVERHANG,
-    h: lay.title + lay.head * 2 + rows * lay.S + lay.S,
+    h: lay.title + lay.head * 2 + rows * lay.S + lay.S + 2,
   };
 }
 

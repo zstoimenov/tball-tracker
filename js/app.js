@@ -3,7 +3,7 @@ import {
   pathClear, batterLimit, total,
 } from './model.js';
 import { renderGrid, renderSheet, drawCell } from './draw.js';
-import { ICON, esc, sheet, confirmSheet, toast, buzz } from './ui.js';
+import { ICON, esc, sheet, confirmSheet, toast, buzz, viewer } from './ui.js';
 import * as db from './storage.js';
 
 const app = document.getElementById('app');
@@ -743,7 +743,8 @@ function renderSheetTab() {
     ${topBar({ back: 'home', title: 'Scoresheet', sub: state.over ? 'Final' : `Innings ${currentInning(state) + 1} of ${game.innings}`, right: helpBtn })}
     <main class="sheet-view">
       <div class="segmented">${game.teams.map((t, i) => `<button class="${i === gridTeam ? 'on' : ''}" data-action="gridTeam" data-t="${i}" style="--team:${t.color || COLORS[i]}"><i></i><span class="seg-name">${esc(t.name)}</span><small>${total(state.teams[i].runs)}</small></button>`).join('')}</div>
-      <div class="sheet-wrap" id="grid-wrap"><canvas id="grid"></canvas></div>
+      <button class="sheet-wrap zoomable" id="grid-wrap" data-action="zoomGrid" aria-label="Open sheet full screen"><canvas id="grid"></canvas></button>
+      <p class="zoom-hint">${ICON.zoom} Tap the sheet to zoom</p>
       <button class="link-btn" data-action="help">What do the symbols mean?</button>
     </main>
     ${tabBar('sheet')}`;
@@ -759,6 +760,15 @@ function drawSheetTab(bt = battingTeam(state)) {
 window.addEventListener('resize', () => { if (current === 'sheet') drawSheetTab(); });
 
 ACTIONS.tabScore = () => go('score');
+// Full-screen, zoomable copy of the live grid, drawn at full size.
+ACTIONS.zoomGrid = () => {
+  const bt = battingTeam(state);
+  const hi = phase() === 'bat' && gridTeam === bt ? { inning: currentInning(state), player: state.teams[bt].next } : null;
+  const c = document.createElement('canvas');
+  renderGrid(c, game, state, gridTeam, hi);
+  viewer(c.toDataURL('image/png'), game.teams[gridTeam].name);
+};
+ACTIONS.zoomPreview = () => { if (sheetUrl) viewer(sheetUrl, 'Scoresheet'); };
 ACTIONS.tabSheet = () => {
   state = replay(game);
   gridTeam = state.over ? 0 : battingTeam(state);
@@ -922,7 +932,8 @@ function renderFinish() {
       </section>
       <section class="card">
         <h2 class="section">Preview</h2>
-        <div class="sheet-wrap"><img id="preview" alt="Scoresheet preview"></div>
+        <button class="sheet-wrap zoomable" data-action="zoomPreview" aria-label="Open preview full screen"><img id="preview" alt="Scoresheet preview"></button>
+        <p class="zoom-hint">${ICON.zoom} Tap the preview to zoom</p>
       </section>
     </main>
     ${tabBar('share')}`;

@@ -425,7 +425,7 @@ main.score { padding-top: 12px; }
 
 .sheet-view { padding-top: 12px; }
 .sheet-view .segmented button small { font-weight: 900; opacity: 1; }
-.link-btn { display: block; margin: 12px auto 0; border: 0; background: none; color: var(--muted); font-weight: 600; text-decoration: underline; font-size: 14px; }
+.link-btn { display: block; margin: 4px auto 0; border: 0; background: none; color: var(--muted); font-weight: 600; text-decoration: underline; font-size: 14px; }
 
 /* ---------- finish ---------- */
 .scoreboard.final { text-align: center; padding-top: 10px; padding-bottom: 22px; }
@@ -564,3 +564,24 @@ main.score { padding-top: 12px; }
 }
 
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+
+/* ---------- full-screen sheet viewer ---------- */
+.viewer { position: fixed; inset: 0; z-index: 80; background: #05080f; animation: fade .16s ease; }
+.viewer.closing { animation: fade .16s ease reverse forwards; }
+.viewer-stage { position: absolute; left: 0; right: 0; bottom: 0; top: calc(env(safe-area-inset-top) + 58px); overflow: hidden; touch-action: none; cursor: grab; }
+.viewer-stage img { position: absolute; left: 0; top: 0; transform-origin: 0 0; background: #fff; will-change: transform; pointer-events: none; }
+.viewer-bar {
+  position: absolute; left: 0; right: 0; top: 0; display: flex; align-items: center; gap: 6px;
+  padding: calc(env(safe-area-inset-top) + 8px) 10px 8px; color: #fff;
+  background: #05080f;
+}
+.viewer-bar span { flex: 1; font-weight: 800; }
+.viewer-bar .icon-btn { background: rgba(255, 255, 255, .14); font-size: 24px; font-weight: 700; }
+.viewer-hint {
+  position: absolute; left: 0; right: 0; bottom: calc(env(safe-area-inset-bottom) + 18px); margin: 0; text-align: center;
+  color: #fff; font-size: 13px; font-weight: 600; opacity: 0; animation: hint 3s ease; pointer-events: none;
+}
+@keyframes hint { 10%, 70% { opacity: .85; } }
+.zoomable { position: relative; display: block; width: 100%; padding: 0; border: 0; background: none; cursor: zoom-in; }
+.zoom-hint { display: flex; align-items: center; justify-content: center; gap: 6px; margin: 8px 0 0; color: var(--muted); font-size: 13px; font-weight: 600; }
+.zoom-hint svg { width: 16px; height: 16px; }
