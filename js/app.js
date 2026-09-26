@@ -283,6 +283,7 @@ ACTIONS.new = () => {
     innings: last?.innings || 4,
     maxOuts: last?.maxOuts ?? 3,
     maxBatters: last?.maxBatters ?? 9,
+    strikeouts: last?.strikeouts ?? true,
     // Start from last game's own team to save typing each week.
     teams: [
       { name: last?.teams[0].name || '', color: last?.teams[0].color || COLORS[0], players: last ? [...last.teams[0].players] : [] },
@@ -304,6 +305,7 @@ ACTIONS.editGame = () => {
     innings: game.innings,
     maxOuts: game.maxOuts,
     maxBatters: game.maxBatters,
+    strikeouts: game.strikeouts ?? true,
     teams: game.teams.map((t, i) => ({ name: t.name, color: t.color || COLORS[i], players: [...t.players] })),
     // Events refer to batting positions, so existing players can be renamed but not removed.
     locked: game.events.length ? game.teams.map((t) => t.players.length) : [0, 0],
@@ -409,7 +411,12 @@ function setupRules() {
       <div class="card row2">
         <label class="field"><span>Outs <em>0 = no limit</em></span><input class="input" type="number" min="0" max="9" inputmode="numeric" data-bind="maxOuts" value="${d.maxOuts}"></label>
         <label class="field"><span>Batters <em>0 = whole team</em></span><input class="input" type="number" min="0" max="30" inputmode="numeric" data-bind="maxBatters" value="${d.maxBatters}"></label>
-      </div>` : ''}`;
+      </div>` : ''}
+    <h2 class="section">Strikeouts</h2>
+    <div class="card">
+      <label class="toggle setting"><input type="checkbox" data-action="strikeouts" ${d.strikeouts ? 'checked' : ''}><span></span>
+        <div><b>Batters can strike out</b><small>Out after 3 misses. Many junior leagues let the batter keep swinging until they hit, so turn this off if yours does. You can change it later.</small></div></label>
+    </div>`;
 }
 
 function bindSetupInputs() {
@@ -461,6 +468,7 @@ ACTIONS.movePlayer = (el) => {
 };
 ACTIONS.removePlayer = (el) => { draft.teams[draft.tab].players.splice(+el.dataset.k, 1); renderSetup(); };
 ACTIONS.innings = (el) => { draft.innings += +el.dataset.d; renderSetup(); };
+ACTIONS.strikeouts = (el) => { draft.strikeouts = el.checked; };
 ACTIONS.preset = (el) => {
   draft.preset = el.dataset.k;
   if (draft.preset !== 'custom') [draft.maxOuts, draft.maxBatters] = draft.preset.split(':').map(Number);
@@ -495,6 +503,7 @@ ACTIONS.setupNext = () => {
     innings: d.innings,
     maxOuts: d.maxOuts,
     maxBatters: d.maxBatters,
+    strikeouts: d.strikeouts,
     teams: d.teams.map((t) => ({ name: t.name, color: t.color, players: t.players })),
   };
   if (d.editing) Object.assign(game, opts);
@@ -505,6 +514,8 @@ ACTIONS.setupNext = () => {
 };
 
 // ---------- scoring ----------
+// Older games have no setting: strikeouts were always available.
+const strikeoutsOn = () => game.strikeouts !== false;
 const lastEvent = () => game.events[game.events.length - 1];
 const anyRunners = () => state.runners.some((r) => r != null);
 // Players without a name go by their batting number.
@@ -659,7 +670,7 @@ function panel(ph, bt) {
           <button class="play safe" data-action="bat" data-r="${h.r}">${miniDiamond(h.r)}<b>${h.label}</b></button>`).join('')}
         </div>
         <h3 class="group out-t">Out</h3>
-        <div class="plays outplays">${OUTS.map((o) => `
+        <div class="plays outplays ${strikeoutsOn() ? '' : 'two'}">${OUTS.filter((o) => o.r !== 'K' || strikeoutsOn()).map((o) => `
           <button class="play out" data-action="bat" data-r="${o.r}"><span class="glyph">${o.glyph}</span><b>${o.label}</b><small>${o.hint}</small></button>`).join('')}
         </div>
       </section>`;
@@ -815,7 +826,7 @@ ACTIONS.help = () =>
           <li>Teams take turns to bat. Each turn is half an <b>innings</b>.</li>
           <li>The batter hits the ball off the tee and runs. If they reach a base before the ball, they're <b>safe</b>.</li>
           <li>A player who gets all the way round to home scores a <b>run</b>. Most runs wins.</li>
-          <li>The batter is <b>out</b> if they miss 3 times, the ball is caught in the air, or a fielder beats them to the base.</li>
+          <li>The batter is <b>out</b> if the ball is caught in the air, or a fielder beats them to the base. In leagues with strikeouts, also after 3 misses (turn this on or off in <b>Edit game</b>).</li>
           <li>The innings ends after the limit set for the game (often 3 outs or 9 batters). Tell the umpire when that happens.</li>
         </ul>
         <h4>Scoring in this app</h4>

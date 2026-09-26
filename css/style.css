@@ -363,6 +363,10 @@ main.score { padding-top: 12px; }
 .plays { display: grid; gap: 8px; }
 .plays.hits { grid-template-columns: repeat(4, 1fr); }
 .plays.outplays { grid-template-columns: repeat(3, 1fr); }
+.plays.outplays.two { grid-template-columns: repeat(2, 1fr); }
+.toggle.setting { margin: 0; align-items: flex-start; }
+.toggle.setting b { display: block; }
+.toggle.setting small { display: block; color: var(--muted); font-weight: 500; font-size: 13px; margin-top: 2px; }
 .play {
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; text-align: center;
   padding: 8px 4px; min-height: 66px; border: 0; border-radius: 16px; min-width: 0;

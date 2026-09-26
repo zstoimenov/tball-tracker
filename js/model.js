@@ -21,6 +21,7 @@ export function newGame(opts) {
     innings: opts.innings,
     maxOuts: opts.maxOuts,
     maxBatters: opts.maxBatters,
+    strikeouts: opts.strikeouts !== false,
     teams: opts.teams, // [{name, players:[names]}], teams[0] bats first
     events: [],
     signature: null,

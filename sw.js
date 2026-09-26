@@ -1,5 +1,5 @@
 // Offline support: cache the app shell, serve cache first, refresh in background.
-const CACHE = 'tball-v5';
+const CACHE = 'tball-v6';
 const SHELL = [
   './', 'index.html', 'css/style.css', 'js/app.js', 'js/model.js', 'js/draw.js', 'js/ui.js', 'js/storage.js',
   'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png',
