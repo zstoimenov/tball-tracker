@@ -45,15 +45,13 @@ let game = null;
 let state = null;
 let draft = null; // setup wizard
 let selected = null; // selected runner (player index)
-let sheetOpen = store.get('tball.sheetOpen', false);
 let gridTeam = 0;
-let gridPinned = false;
 let current = 'home';
 
 function go(view, arg) {
   current = view;
   selected = null;
-  ({ home: renderHome, intro: renderIntro, setup: renderSetup, score: renderScore, finish: renderFinish })[view](arg);
+  ({ home: renderHome, intro: renderIntro, setup: renderSetup, score: renderScore, sheet: renderSheetTab, finish: renderFinish })[view](arg);
   window.scrollTo(0, 0);
 }
 
@@ -265,7 +263,6 @@ function saveFile(file) {
 
 ACTIONS.open = (el) => {
   game = games.find((g) => g.id === el.dataset.id);
-  gridPinned = false;
   go('score');
 };
 
@@ -493,7 +490,6 @@ ACTIONS.setupNext = () => {
     d.teams.forEach((t) => (t.players = t.players.map((p) => p.trim())));
     const empty = d.teams.filter((t) => !t.players.length);
     empty.forEach((t) => (t.players = Array(9).fill('')));
-    if (empty.length) toast(`${empty.map((t) => t.name).join(' and ')}: using 9 numbered players`);
   }
   if (d.step < 2) { d.step++; return renderSetup(); }
 
@@ -509,7 +505,6 @@ ACTIONS.setupNext = () => {
   if (d.editing) Object.assign(game, opts);
   else { game = newGame(opts); games.push(game); db.persist(); }
   save();
-  gridPinned = false;
   go('score');
 };
 
@@ -533,14 +528,30 @@ function phase() {
   return 'bat';
 }
 
+// The description is stored on the event and shown in the top bar next to
+// Undo, so no pop-up ever covers the screen.
 function commit(ev, msg) {
+  if (msg) ev.m = msg;
   game.events.push(ev);
   save();
   selected = null;
   buzz();
   renderScore();
-  if (msg) toast(msg, { label: 'Undo', run: undo });
 }
+
+function lastPlay() {
+  const ev = lastEvent();
+  if (!ev) return 'Tap a play to begin';
+  const generic = { bat: 'batter recorded', adv: 'runner moved', rout: 'runner out', next: 'next batter up', end: 'innings ended', over: 'game ended' };
+  return `Last: ${esc(ev.m || generic[ev.t] || 'play')}`;
+}
+
+const tabBar = (active) => `
+  <nav class="bottom-bar tabs-bar" role="tablist">
+    <button role="tab" aria-selected="${active === 'score'}" class="${active === 'score' ? 'on' : ''}" data-action="tabScore">${ICON.ball}<span>Score</span></button>
+    <button role="tab" aria-selected="${active === 'sheet'}" class="${active === 'sheet' ? 'on' : ''}" data-action="tabSheet">${ICON.sheet}<span>Sheet</span></button>
+    <button role="tab" aria-selected="${active === 'share'}" class="${active === 'share' ? 'on' : ''} ${replay(game).over && active !== 'share' ? 'hot' : ''}" data-action="finish">${ICON.share}<span>Share</span></button>
+  </nav>`;
 
 function undo() {
   if (!game.events.length) return;
@@ -711,42 +722,56 @@ function renderScore() {
   state = replay(game);
   const bt = battingTeam(state);
   const ph = phase();
-  if (!gridPinned) gridTeam = state.over ? 0 : bt;
   if (selected != null && !state.runners.includes(selected)) selected = null;
 
   app.innerHTML = `
-    ${topBar({ back: 'home', title: state.over ? 'Game over' : `Innings ${currentInning(state) + 1} of ${game.innings}`,
-      right: `${helpBtn}<button class="icon-btn" data-action="menu" aria-label="More">${ICON.more}</button>` })}
+    ${topBar({ back: 'home', title: state.over ? 'Game over' : `Innings ${currentInning(state) + 1} of ${game.innings}`, sub: lastPlay(),
+      right: `<button class="undo-btn" data-action="undo" ${game.events.length ? '' : 'disabled'} aria-label="Undo last play">${ICON.undo}<span>Undo</span></button><button class="icon-btn" data-action="menu" aria-label="More">${ICON.more}</button>` })}
     ${hero(bt)}
     <main class="score">
       ${state.over ? '' : diamond(bt, ph)}
       ${panel(ph, bt)}
-      <section class="card sheet-card ${sheetOpen ? 'open' : ''}" id="sheet-card">
-        <button class="sheet-toggle" data-action="toggleSheet">${ICON.sheet}<span><b>Scoresheet</b><small>The paper sheet, filled in as you go</small></span>${ICON.down}</button>
-        ${sheetOpen ? `
-          <div class="segmented">${game.teams.map((t, i) => `<button class="${i === gridTeam ? 'on' : ''}" data-action="gridTeam" data-t="${i}" style="--team:${t.color || COLORS[i]}"><i></i>${esc(t.name)}</button>`).join('')}</div>
-          <div class="sheet-wrap"><canvas id="grid"></canvas></div>` : ''}
-      </section>
     </main>
-    <nav class="bottom-bar">
-      <button data-action="undo" ${game.events.length ? '' : 'disabled'}>${ICON.undo}<span>Undo</span></button>
-      <button data-action="toggleSheet" data-scroll="1">${ICON.sheet}<span>Sheet</span></button>
-      <button data-action="finish" class="${state.over ? 'hot' : ''}">${ICON.share}<span>Share</span></button>
-    </nav>`;
-
-  if (sheetOpen) {
-    const hi = ph === 'bat' && gridTeam === bt ? { inning: currentInning(state), player: state.teams[bt].next } : null;
-    renderGrid(document.getElementById('grid'), game, state, gridTeam, hi);
-  }
+    ${tabBar('score')}`;
 }
+
+// ---------- scoresheet tab ----------
+function renderSheetTab() {
+  state = replay(game);
+  const bt = battingTeam(state);
+  app.innerHTML = `
+    ${topBar({ back: 'home', title: 'Scoresheet', sub: state.over ? 'Final' : `Innings ${currentInning(state) + 1} of ${game.innings}`, right: helpBtn })}
+    <main class="sheet-view">
+      <div class="segmented">${game.teams.map((t, i) => `<button class="${i === gridTeam ? 'on' : ''}" data-action="gridTeam" data-t="${i}" style="--team:${t.color || COLORS[i]}"><i></i><span class="seg-name">${esc(t.name)}</span><small>${total(state.teams[i].runs)}</small></button>`).join('')}</div>
+      <div class="sheet-wrap" id="grid-wrap"><canvas id="grid"></canvas></div>
+      <button class="link-btn" data-action="help">What do the symbols mean?</button>
+    </main>
+    ${tabBar('sheet')}`;
+  drawSheetTab(bt);
+}
+
+function drawSheetTab(bt = battingTeam(state)) {
+  const wrap = document.getElementById('grid-wrap');
+  if (!wrap) return;
+  const hi = phase() === 'bat' && gridTeam === bt ? { inning: currentInning(state), player: state.teams[bt].next } : null;
+  renderGrid(document.getElementById('grid'), game, state, gridTeam, hi, wrap.clientWidth);
+}
+window.addEventListener('resize', () => { if (current === 'sheet') drawSheetTab(); });
+
+ACTIONS.tabScore = () => go('score');
+ACTIONS.tabSheet = () => {
+  state = replay(game);
+  gridTeam = state.over ? 0 : battingTeam(state);
+  go('sheet');
+};
 
 ACTIONS.home = () => go('home');
 ACTIONS.bat = (el) => {
   const r = /\d/.test(el.dataset.r) ? +el.dataset.r : el.dataset.r;
   const bt = battingTeam(state);
   const name = shortName(bt, state.teams[bt].next);
-  const label = typeof r === 'number' ? (r === 4 ? 'home run!' : `safe on ${BASE[r]}`) : OUTS.find((o) => o.r === r).label.toLowerCase();
-  commit({ t: 'bat', r }, `${name}: ${label}`);
+  const label = typeof r === 'number' ? (r === 4 ? 'home run' : `safe on ${BASE[r]}`) : OUTS.find((o) => o.r === r).label.toLowerCase();
+  commit({ t: 'bat', r }, `${name} ${label}`);
 };
 ACTIONS.pick = (el) => {
   const p = +el.dataset.p;
@@ -758,38 +783,30 @@ ACTIONS.moveTo = (el) => {
   const bt = battingTeam(state);
   const to = +el.dataset.to;
   const name = shortName(bt, selected);
-  commit({ t: 'adv', p: selected, to }, to === 4 ? `${name} scored!` : `${name} to ${BASE[to]}`);
+  commit({ t: 'adv', p: selected, to }, to === 4 ? `${name} scored` : `${name} to ${BASE[to]}`);
 };
 ACTIONS.runnerOut = () => {
   const name = shortName(battingTeam(state), selected);
   commit({ t: 'rout', p: selected }, `${name} out`);
 };
-ACTIONS.next = () => commit({ t: 'next' });
-ACTIONS.undo = () => { undo(); toast('Undone'); };
-ACTIONS.endHalf = () => {
-  gridPinned = false;
-  commit({ t: 'end' });
-  if (state.over) toast('Game over');
-};
-ACTIONS.toggleSheet = (el) => {
-  sheetOpen = el.dataset.scroll ? true : !sheetOpen;
-  store.set('tball.sheetOpen', sheetOpen);
-  renderScore();
-  if (sheetOpen) document.getElementById('sheet-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
-};
-ACTIONS.gridTeam = (el) => { gridTeam = +el.dataset.t; gridPinned = true; renderScore(); };
-ACTIONS.hideTips = () => { tips = false; store.set('tball.tips', false); renderScore(); toast('Tips hidden. Turn them back on in Help.'); };
+ACTIONS.next = () => commit({ t: 'next' }, 'next batter up');
+ACTIONS.undo = () => { undo(); buzz(6); };
+ACTIONS.endHalf = () => commit({ t: 'end' }, 'innings ended');
+ACTIONS.gridTeam = (el) => { gridTeam = +el.dataset.t; renderSheetTab(); };
+ACTIONS.hideTips = () => { tips = false; store.set('tball.tips', false); renderScore(); };
 
 ACTIONS.menu = async () => {
   const v = await sheet({
     title: 'Game options',
     body: '<div class="menu-list">' +
+      `<button class="menu-item" data-i="4">${ICON.help}<span><b>Help</b><small>Rules, symbols and tips</small></span></button>` +
       `<button class="menu-item" data-i="0">${ICON.edit}<span><b>Edit game</b><small>Names, players, innings, rules</small></span></button>` +
       (state.over ? '' : `<button class="menu-item" data-i="1">${ICON.flag}<span><b>End innings now</b><small>Before the limit is reached</small></span></button>`) +
       (state.over ? '' : `<button class="menu-item" data-i="2">${ICON.whistle}<span><b>End game now</b><small>E.g. time ran out</small></span></button>`) +
       `<button class="menu-item danger" data-i="3">${ICON.trash}<span><b>Delete game</b></span></button></div>`,
-    actions: [{ value: 'edit' }, { value: 'endHalf' }, { value: 'over' }, { value: 'delete' }],
+    actions: [{ value: 'edit' }, { value: 'endHalf' }, { value: 'over' }, { value: 'delete' }, { value: 'help' }],
   });
+  if (v === 'help') ACTIONS.help();
   if (v === 'edit') ACTIONS.editGame();
   if (v === 'endHalf' && await confirmSheet('End this innings?', "The limit hasn't been reached yet. The other team will bat next.", 'End innings'))
     ACTIONS.endHalf();
@@ -881,7 +898,7 @@ function renderFinish() {
   const rb = total(state.teams[1].runs);
   const headline = !state.over ? 'Game in progress' : ra === rb ? "It's a draw" : `${(ra > rb ? a : b).name} win`;
   app.innerHTML = `
-    ${topBar({ back: 'backToScore', title: 'Sign & share' })}
+    ${topBar({ back: 'home', title: 'Sign & share' })}
     <section class="scoreboard final">
       <small>${esc(headline)}</small>
       <div class="final-score">
@@ -907,7 +924,8 @@ function renderFinish() {
         <h2 class="section">Preview</h2>
         <div class="sheet-wrap"><img id="preview" alt="Scoresheet preview"></div>
       </section>
-    </main>`;
+    </main>
+    ${tabBar('share')}`;
   requestAnimationFrame(initSig);
   buildSheet();
 }

@@ -8,13 +8,24 @@ const GRID = '#222';
 const FAINT = '#9a9a9a';
 const FONT = 'Helvetica, Arial, sans-serif';
 
+// Grid layout. The export uses the fixed default; the live Sheet tab fits
+// the layout to the screen width so nothing needs sideways scrolling.
 export const L = { S: 56, num: 34, name: 116, title: 30, head: 22 };
+const OVERHANG = 14; // room for the next-batter line past the last column
 
-export function gridSize(game, team) {
+export function fitLayout(game, width) {
+  const avail = width - OVERHANG - 28;
+  let S = Math.floor((avail - 84) / game.innings);
+  S = Math.max(34, Math.min(60, S));
+  const name = Math.max(56, Math.min(140, avail - S * game.innings));
+  return { S, num: 28, name, title: 30, head: 22 };
+}
+
+export function gridSize(game, team, lay = L) {
   const rows = game.teams[team].players.length;
   return {
-    w: L.num + L.name + game.innings * L.S + 14, // room for break-line overhang
-    h: L.title + L.head * 2 + rows * L.S + L.S,
+    w: lay.num + lay.name + game.innings * lay.S + OVERHANG,
+    h: lay.title + lay.head * 2 + rows * lay.S + lay.S,
   };
 }
 
@@ -108,15 +119,15 @@ function fitText(ctx, text, maxW) {
 }
 
 // Draws one team's batting grid at (x, y). `hi` = {inning, player} to highlight.
-export function drawGrid(ctx, x, y, game, state, team, hi) {
-  const { S } = L;
+export function drawGrid(ctx, x, y, game, state, team, hi, lay = L) {
+  const { S } = lay;
   const T = game.teams[team];
   const TS = state.teams[team];
   const n = T.players.length;
-  const gx = x + L.num + L.name; // first innings column
-  const top = y + L.title;
-  const rowsTop = top + L.head * 2;
-  const W = L.num + L.name + game.innings * S;
+  const gx = x + lay.num + lay.name; // first innings column
+  const top = y + lay.title;
+  const rowsTop = top + lay.head * 2;
+  const W = lay.num + lay.name + game.innings * S;
 
   ctx.textBaseline = 'middle';
   ctx.fillStyle = INK;
@@ -127,28 +138,28 @@ export function drawGrid(ctx, x, y, game, state, team, hi) {
   if (sw) {
     ctx.fillStyle = T.color;
     ctx.beginPath();
-    ctx.roundRect(x, y + L.title / 2 - 9, 12, 14, 3);
+    ctx.roundRect(x, y + lay.title / 2 - 9, 12, 14, 3);
     ctx.fill();
     ctx.fillStyle = INK;
   }
-  ctx.fillText(fitText(ctx, T.name, W - 60 - sw), x + sw, y + L.title / 2 - 2);
+  ctx.fillText(fitText(ctx, T.name, W - 60 - sw), x + sw, y + lay.title / 2 - 2);
   ctx.textAlign = 'right';
-  ctx.fillText(String(total(TS.runs)), x + W, y + L.title / 2 - 2);
+  ctx.fillText(String(total(TS.runs)), x + W, y + lay.title / 2 - 2);
 
   // Header
   ctx.strokeStyle = GRID;
   ctx.lineWidth = 1;
   ctx.font = `12px ${FONT}`;
   ctx.textAlign = 'center';
-  ctx.strokeRect(gx, top, game.innings * S, L.head);
-  ctx.fillText('INNING', gx + (game.innings * S) / 2, top + L.head / 2);
-  ctx.strokeRect(x, top + L.head, L.num, L.head);
-  ctx.fillText('#', x + L.num / 2, top + L.head * 1.5);
-  ctx.strokeRect(x + L.num, top + L.head, L.name, L.head);
-  ctx.fillText('Batter', x + L.num + L.name / 2, top + L.head * 1.5);
+  ctx.strokeRect(gx, top, game.innings * S, lay.head);
+  ctx.fillText('INNING', gx + (game.innings * S) / 2, top + lay.head / 2);
+  ctx.strokeRect(x, top + lay.head, lay.num, lay.head);
+  ctx.fillText('#', x + lay.num / 2, top + lay.head * 1.5);
+  ctx.strokeRect(x + lay.num, top + lay.head, lay.name, lay.head);
+  ctx.fillText('Batter', x + lay.num + lay.name / 2, top + lay.head * 1.5);
   for (let i = 0; i < game.innings; i++) {
-    ctx.strokeRect(gx + i * S, top + L.head, S, L.head);
-    ctx.fillText(String(i + 1), gx + i * S + S / 2, top + L.head * 1.5);
+    ctx.strokeRect(gx + i * S, top + lay.head, S, lay.head);
+    ctx.fillText(String(i + 1), gx + i * S + S / 2, top + lay.head * 1.5);
   }
 
   // Batter rows
@@ -156,14 +167,14 @@ export function drawGrid(ctx, x, y, game, state, team, hi) {
     const ry = rowsTop + p * S;
     ctx.strokeStyle = GRID;
     ctx.lineWidth = 1;
-    ctx.strokeRect(x, ry, L.num, S);
-    ctx.strokeRect(x + L.num, ry, L.name, S);
+    ctx.strokeRect(x, ry, lay.num, S);
+    ctx.strokeRect(x + lay.num, ry, lay.name, S);
     ctx.fillStyle = INK;
     ctx.font = `13px ${FONT}`;
     ctx.textAlign = 'center';
-    ctx.fillText(String(p + 1), x + L.num / 2, ry + S / 2);
+    ctx.fillText(String(p + 1), x + lay.num / 2, ry + S / 2);
     ctx.textAlign = 'left';
-    ctx.fillText(fitText(ctx, T.players[p] || '', L.name - 10), x + L.num + 6, ry + S / 2);
+    ctx.fillText(fitText(ctx, T.players[p] || '', lay.name - 10), x + lay.num + 6, ry + S / 2);
     for (let i = 0; i < game.innings; i++) {
       const cx = gx + i * S;
       const on = hi && hi.inning === i && hi.player === p;
@@ -228,8 +239,9 @@ export function drawGrid(ctx, x, y, game, state, team, hi) {
 }
 
 // Renders the canvas for the live grid of one team at device resolution.
-export function renderGrid(canvas, game, state, team, hi) {
-  const { w, h } = gridSize(game, team);
+export function renderGrid(canvas, game, state, team, hi, width) {
+  const lay = width ? fitLayout(game, width) : L;
+  const { w, h } = gridSize(game, team, lay);
   const dpr = Math.max(2, window.devicePixelRatio || 1);
   canvas.width = w * dpr;
   canvas.height = h * dpr;
@@ -239,7 +251,7 @@ export function renderGrid(canvas, game, state, team, hi) {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.fillStyle = '#fff';
   ctx.fillRect(0, 0, w, h);
-  drawGrid(ctx, 0, 0, game, state, team, hi);
+  drawGrid(ctx, 0, 0, game, state, team, hi, lay);
 }
 
 function fmtDate(d) {
@@ -250,16 +262,17 @@ function fmtDate(d) {
   }
 }
 
-// Full exported sheet: header, both grids side by side, umpire signature.
+// Full exported sheet, portrait so it reads well on a phone: header, the
+// two teams' grids stacked, umpire signature and a symbol key.
 export function renderSheet(game, state, sigImg) {
-  const M = 32;
-  const gap = 44;
+  const M = 28;
+  const gap = 36;
   const a = gridSize(game, 0);
   const b = gridSize(game, 1);
-  const headH = 96;
-  const footH = 120;
-  const W = M * 2 + a.w + gap + b.w;
-  const H = M + headH + Math.max(a.h, b.h) + footH + M;
+  const headH = 100;
+  const footH = 150;
+  const W = M * 2 + Math.max(a.w, b.w, 420);
+  const H = M + headH + a.h + gap + b.h + footH;
   const scale = 2;
   const c = document.createElement('canvas');
   c.width = W * scale;
@@ -273,46 +286,50 @@ export function renderSheet(game, state, sigImg) {
   const t1 = game.teams[1].name;
   const r0 = total(state.teams[0].runs);
   const r1 = total(state.teams[1].runs);
+  const inner = W - M * 2;
 
   ctx.fillStyle = INK;
   ctx.textBaseline = 'alphabetic';
   ctx.textAlign = 'left';
   ctx.font = `bold 24px ${FONT}`;
-  ctx.fillText('Tee-ball scoresheet', M, M + 24);
-  ctx.font = `15px ${FONT}`;
-  ctx.fillText([fmtDate(game.date), game.venue].filter(Boolean).join('  ·  '), M, M + 48);
-  ctx.font = `bold 20px ${FONT}`;
-  ctx.fillText(`${t0} ${r0}  –  ${r1} ${t1}`, M, M + 78);
+  ctx.fillText('Tee-ball scoresheet', M, M + 22);
   ctx.textAlign = 'right';
   ctx.font = `13px ${FONT}`;
   const played = Math.ceil(Math.min(state.half, game.innings * 2) / 2) || 1;
-  ctx.fillText(state.over ? `Final · ${played} innings` : 'In progress', W - M, M + 24);
+  ctx.fillText(state.over ? `Final · ${played} innings` : 'In progress', W - M, M + 20);
+  ctx.textAlign = 'left';
+  ctx.font = `15px ${FONT}`;
+  ctx.fillText(fitText(ctx, [fmtDate(game.date), game.venue].filter(Boolean).join('  ·  '), inner), M, M + 46);
+  ctx.font = `bold 20px ${FONT}`;
+  ctx.fillText(fitText(ctx, `${t0} ${r0}  –  ${r1} ${t1}`, inner), M, M + 78);
 
-  const gy = M + headH;
+  let gy = M + headH;
   drawGrid(ctx, M, gy, game, state, 0);
-  drawGrid(ctx, M + a.w + gap, gy, game, state, 1);
+  gy += a.h + gap;
+  drawGrid(ctx, M, gy, game, state, 1);
 
-  const fy = gy + Math.max(a.h, b.h) + 24;
+  const fy = gy + b.h + 24;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'alphabetic';
   ctx.fillStyle = INK;
   ctx.font = `14px ${FONT}`;
   ctx.fillText('Umpire signature:', M, fy + 60);
   const sx = M + 130;
+  const sw = Math.min(320, W - M - sx);
   if (sigImg) {
     const ratio = sigImg.width / sigImg.height;
-    const sh = 80;
-    ctx.drawImage(sigImg, sx, fy, Math.min(sh * ratio, 320), sh);
+    const sh = 70;
+    ctx.drawImage(sigImg, sx, fy + 60 - sh + 4, Math.min(sh * ratio, sw), sh);
   }
   ctx.strokeStyle = INK;
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(sx, fy + 64);
-  ctx.lineTo(sx + 320, fy + 64);
+  ctx.lineTo(sx + sw, fy + 64);
   ctx.stroke();
-  ctx.textAlign = 'right';
   ctx.fillStyle = '#666';
   ctx.font = `11px ${FONT}`;
-  ctx.fillText('Dot: reached base · Arc: ran several bases · Filled circle: scored · Number: out · Strike marks: strikeout', W - M, fy + 100);
+  ctx.fillText('Key: dot = reached base · arc = ran several bases · filled circle = scored', M, fy + 96);
+  ctx.fillText('number = out (1st, 2nd, 3rd) · strike marks = struck out · thick line = next batter', M, fy + 112);
   return c;
 }

@@ -225,7 +225,8 @@ main.score { padding-top: 12px; }
   font-weight: 700; color: var(--muted); overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
 }
 .segmented button i { width: 10px; height: 10px; border-radius: 50%; background: var(--team); flex: none; }
-.segmented button small { font-size: 12px; opacity: .7; }
+.segmented button small { font-size: 12px; opacity: .7; flex: none; }
+.segmented .seg-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .segmented button.on { background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
 .card .segmented { background: var(--surface-2); }
 
@@ -387,18 +388,9 @@ main.score { padding-top: 12px; }
 .panel.alert p { margin: 0 0 14px; color: var(--muted); }
 .panel.done { text-align: center; }
 
-/* ---------- scoresheet card ---------- */
-.sheet-card { padding: 0; overflow: hidden; }
-.sheet-toggle { width: 100%; display: flex; align-items: center; gap: 12px; padding: 16px; border: 0; background: none; text-align: left; }
-.sheet-toggle > span { flex: 1; }
-.sheet-toggle b { display: block; }
-.sheet-toggle small { color: var(--muted); font-size: 13px; }
-.sheet-toggle > svg:last-child { color: var(--muted); transition: transform .2s; }
-.sheet-card.open .sheet-toggle > svg:last-child { transform: rotate(180deg); }
-.sheet-card .segmented { margin: 0 12px 12px; }
+/* ---------- scoresheet ---------- */
 .sheet-wrap { overflow-x: auto; background: #fff; border-radius: 12px; }
-.sheet-card .sheet-wrap { margin: 0 12px 12px; border: 1px solid var(--line); }
-.sheet-wrap canvas, .sheet-wrap img { display: block; width: 100%; min-width: 360px; height: auto; }
+.sheet-wrap canvas, .sheet-wrap img { display: block; width: 100%; height: auto; }
 
 /* ---------- bottom bar ---------- */
 .bottom-bar {
@@ -411,12 +403,29 @@ main.score { padding-top: 12px; }
 }
 .bottom-bar button {
   flex: 1; max-width: 200px; display: flex; flex-direction: column; align-items: center; gap: 2px;
-  padding: 8px 4px; border: 0; border-radius: 12px; background: none; color: var(--muted);
+  padding: 4px 4px; border: 0; border-radius: 12px; background: none; color: var(--muted);
   font-size: 12px; font-weight: 700;
 }
 .bottom-bar button:active:not(:disabled) { background: var(--surface-2); }
 .bottom-bar button:disabled { opacity: .35; }
 .bottom-bar button.hot { color: var(--ink); background: var(--accent); }
+.bottom-bar button.on { color: var(--ink); }
+.bottom-bar button svg { width: 44px; height: 26px; padding: 3px 10px; border-radius: 10px; }
+.bottom-bar button.on svg { color: var(--accent-ink); background: var(--accent); }
+
+/* Undo lives in the top bar next to the last play, never over content. */
+.undo-btn {
+  display: inline-flex; align-items: center; gap: 4px; flex: none;
+  height: 36px; padding: 0 10px 0 8px; border: 0; border-radius: 10px;
+  background: rgba(255, 255, 255, .1); color: var(--hero-ink); font-weight: 700; font-size: 14px;
+}
+.undo-btn svg { width: 18px; height: 18px; }
+.undo-btn:disabled { opacity: .35; }
+.undo-btn:active:not(:disabled) { background: rgba(255, 255, 255, .2); }
+
+.sheet-view { padding-top: 12px; }
+.sheet-view .segmented button small { font-weight: 900; opacity: 1; }
+.link-btn { display: block; margin: 12px auto 0; border: 0; background: none; color: var(--muted); font-weight: 600; text-decoration: underline; font-size: 14px; }
 
 /* ---------- finish ---------- */
 .scoreboard.final { text-align: center; padding-top: 10px; padding-bottom: 22px; }
@@ -543,7 +552,9 @@ main.score { padding-top: 12px; }
   .panel-head h2 { font-size: 19px; margin-bottom: 8px; }
   .btn.big { min-height: 50px; }
   .bottom-bar { padding-top: 3px; padding-bottom: calc(env(safe-area-inset-bottom) + 3px); }
-  .bottom-bar button { padding: 5px 4px; }
+  .bottom-bar button { padding: 2px 4px; }
+  .top-title p { font-size: 12px; }
+  .undo-btn { height: 32px; }
 }
 @media (max-height: 600px) {
   .plays.hits .play b { font-size: 13px; }

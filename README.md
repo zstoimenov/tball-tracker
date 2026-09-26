@@ -10,11 +10,13 @@ through the phone's share sheet.
 - 3-step setup: teams (with colours), players (names optional, unnamed players
   are shown by number), rules (innings count and when an innings ends).
 - Guided scoring: tap what the batter did, then move any runners by tapping them
-  on the diamond. Forced runners move automatically. Every tap can be undone.
+  on the diamond. Forced runners move automatically. The last play and an Undo
+  button sit in the top bar, so nothing pops up over the screen.
+- Three tabs: Score, Sheet (the paper sheet, fitted to the phone width) and Share.
 - "Innings over, tell the umpire" prompts at the configured limit.
 
 ## Scoresheet
-Both teams' grids drawn like the paper sheet: dots for bases reached, arcs
+Both teams' grids (stacked, portrait) drawn like the paper sheet: dots for bases reached, arcs
 for several bases on one hit, filled circle for a run, out number in the
 centre circle, strike marks for strikeouts, diagonal line for who bats first
 next innings, and innings runs with a running total. The umpire signs on the
