@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Tee-ball Tracker</title>
+  <meta name="description" content="Score tee-ball games on the classic paper scoresheet and share the result.">
+  <meta name="theme-color" content="#1f6f43">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Tee-ball">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <!-- Home: saved games -->
+  <section id="home" class="view">
+    <header class="bar"><h1>Tee-ball Tracker</h1></header>
+    <main>
+      <button id="new-game" class="btn primary wide">+ New game</button>
+      <h2>Games</h2>
+      <ul id="game-list" class="list"></ul>
+      <p id="no-games" class="muted">No games yet.</p>
+    </main>
+  </section>
+
+  <!-- Setup / edit game -->
+  <section id="setup" class="view" hidden>
+    <header class="bar">
+      <button class="icon-btn" data-go="home" aria-label="Back">‹</button>
+      <h1 id="setup-title">New game</h1>
+    </header>
+    <main>
+      <form id="setup-form">
+        <div class="row">
+          <label>Date <input type="date" name="date" required></label>
+          <label>Innings <input type="number" name="innings" min="1" max="12" value="4" required></label>
+        </div>
+        <label>Venue (optional) <input type="text" name="venue" autocomplete="off"></label>
+
+        <fieldset>
+          <legend>Bats first</legend>
+          <label>Team name <input type="text" name="t0" required autocomplete="off"></label>
+          <label>Batting order <span class="muted">(one player per line)</span>
+            <textarea name="p0" rows="6" required></textarea></label>
+        </fieldset>
+        <fieldset>
+          <legend>Bats second</legend>
+          <label>Team name <input type="text" name="t1" required autocomplete="off"></label>
+          <label>Batting order <span class="muted">(one player per line)</span>
+            <textarea name="p1" rows="6" required></textarea></label>
+        </fieldset>
+
+        <fieldset>
+          <legend>Innings ends after</legend>
+          <label>Rule
+            <select name="preset">
+              <option value="3:9">3 outs or 9 batters</option>
+              <option value="3:0">3 outs only</option>
+              <option value="0:0">Whole team bats (no outs limit)</option>
+              <option value="custom">Custom</option>
+            </select>
+          </label>
+          <div class="row" id="custom-rule">
+            <label>Outs <span class="muted">(0 = none)</span><input type="number" name="maxOuts" min="0" max="9" value="3"></label>
+            <label>Batters <span class="muted">(0 = whole team)</span><input type="number" name="maxBatters" min="0" max="30" value="9"></label>
+          </div>
+        </fieldset>
+        <p id="setup-error" class="error" hidden></p>
+        <button type="submit" class="btn primary wide">Start scoring</button>
+        <button type="button" id="delete-game" class="btn danger wide" hidden>Delete game</button>
+      </form>
+    </main>
+  </section>
+
+  <!-- Live scoring -->
+  <section id="score" class="view" hidden>
+    <header class="bar">
+      <button class="icon-btn" data-go="home" aria-label="Games">‹</button>
+      <h1 id="score-title"></h1>
+      <button class="icon-btn" id="edit-game" aria-label="Edit game">✎</button>
+    </header>
+    <main>
+      <div id="scoreboard" class="scoreboard"></div>
+      <div id="status" class="status"></div>
+      <div id="umpire" class="banner" hidden></div>
+
+      <div id="batting-panel">
+        <p class="now">Now batting: <strong id="batter-name"></strong></p>
+        <div class="grid4">
+          <button class="btn safe" data-bat="1">1st</button>
+          <button class="btn safe" data-bat="2">2nd</button>
+          <button class="btn safe" data-bat="3">3rd</button>
+          <button class="btn safe" data-bat="4">Home run</button>
+          <button class="btn out" data-bat="K">Strikeout</button>
+          <button class="btn out" data-bat="C">Caught out</button>
+          <button class="btn out span2" data-bat="T">Out (thrown / tagged)</button>
+        </div>
+      </div>
+
+      <div id="runners" class="runners"></div>
+
+      <div class="controls">
+        <button class="btn" id="undo">↶ Undo</button>
+        <button class="btn" id="end-half">End innings</button>
+        <button class="btn" id="finish">Finish &amp; share</button>
+      </div>
+
+      <div class="tabs" role="tablist" id="grid-tabs"></div>
+      <div class="sheet-wrap"><canvas id="grid"></canvas></div>
+    </main>
+  </section>
+
+  <!-- Finish, sign and share -->
+  <section id="finish-view" class="view" hidden>
+    <header class="bar">
+      <button class="icon-btn" data-go="score" aria-label="Back to scoring">‹</button>
+      <h1>Finish &amp; share</h1>
+    </header>
+    <main>
+      <div id="final-score" class="final"></div>
+      <p id="not-over" class="muted" hidden>The game isn't finished. <button class="link" id="end-game">End game now</button></p>
+      <h2>Umpire signature</h2>
+      <div class="sig-wrap"><canvas id="sig"></canvas></div>
+      <button class="btn small" id="sig-clear">Clear signature</button>
+      <button class="btn primary wide" id="share">Share scoresheet</button>
+      <button class="btn wide" id="download">Save image</button>
+      <h2>Preview</h2>
+      <div class="sheet-wrap"><img id="preview" alt="Scoresheet preview"></div>
+    </main>
+  </section>
+
+  <div id="toast" class="toast" hidden></div>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
