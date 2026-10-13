@@ -723,10 +723,22 @@ function playSummary() {
 
 function confirmPlay() {
   const { r, rows } = pending;
-  const evs = [{ t: 'bat', r }];
-  for (const w of rows) if (w.dest === OUT) evs.push({ t: 'rout', p: w.p });
+  // Runners put out are taken off their starting base before the hit is
+  // applied, so the sheet never shows them reaching a base they were out at.
+  const runnersOut = rows.filter((w) => !w.batter && w.dest === OUT);
+  const evs = runnersOut.map((w) => ({ t: 'rout', p: w.p }));
+  evs.push({ t: 'bat', r });
+  const batter = rows.find((w) => w.batter);
+  if (batter?.dest === OUT) evs.push({ t: 'rout', p: batter.p });
+  // Where everyone stands once the hit is applied without those runners.
+  const at = new Map(rows.map((w) => [w.p, w.batter ? r : w.from]));
+  if (typeof r === 'number') {
+    const runners = [...state.runners];
+    for (const w of runnersOut) runners[w.from] = null;
+    for (const [p, , to] of forcedMoves({ runners }, r)) at.set(p, to);
+  }
   // Lead runner first so nobody lands on a base that is still occupied.
-  for (const w of rows) if (w.dest !== OUT && w.dest > w.min) evs.push({ t: 'adv', p: w.p, to: w.dest });
+  for (const w of rows) if (w.dest !== OUT && w.dest > at.get(w.p)) evs.push({ t: 'adv', p: w.p, to: w.dest });
   commitPlay(evs, playSummary());
 }
 
