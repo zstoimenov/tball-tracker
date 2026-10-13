@@ -10,9 +10,9 @@ through the phone's share sheet.
 - 3-step setup: teams (with colours), players (names optional, unnamed players
   are shown by number), rules (innings count and when an innings ends).
 - Guided scoring: tap what the batter did, then a list shows everyone on base.
-  Tap where each one ended up (Stayed, a base, Home or Out) and Confirm. Forced
-  runners are pre-set, the diamond previews the moves, and Undo takes back the
-  whole play. Later moves (steals, overthrows) by tapping a runner on the diamond.
+  Tap where each one ended up (Stayed, a base, Home or Out) and Confirm. Nothing
+  is guessed: impossible bases are hidden, Confirm waits until every runner is
+  placed, the diamond previews the moves, and Undo takes back the whole play. Later moves (steals, overthrows) by tapping a runner on the diamond.
 - Runs this innings shown live on the scoreboard.
 - Three tabs: Score, Sheet (the paper sheet, fitted to the phone width) and Share.
 - "Innings over, tell the umpire" prompts at the configured limit.

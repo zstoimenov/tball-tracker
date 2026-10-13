@@ -654,8 +654,8 @@ function coachTip(ph, bt) {
 
 // ---------- placing a play ----------
 // After the batter's result, every runner gets a row. The batter is set to
-// the base tapped and forced runners to the least they had to run; anyone
-// else must be placed explicitly, since tee-ball runners vary so much.
+// the base tapped; every other runner must be placed explicitly, even when
+// forced, since they may have been put out instead.
 const OUT = -1;
 
 function startPlay(r) {
@@ -677,15 +677,14 @@ function startPlay(r) {
 
 // Works out each row's lowest possible base (floor) and final base (dest)
 // from the trailing runner forward: a runner must end ahead of everyone
-// behind them, so a pick that has become impossible is lifted to the floor
-// and returns if the runner behind is moved back.
+// behind them. A pick that has become impossible is cleared, so the runner
+// must be placed again, and returns if the runner behind is moved back.
 function settle() {
   let behind = 0; // lowest base still free for the next runner ahead
   for (const w of [...pending.rows].reverse()) {
     w.floor = Math.max(w.min, Math.min(behind, 4));
     if (w.pick === OUT) w.dest = OUT;
-    else if (w.pick != null) w.dest = Math.max(w.pick, w.floor);
-    else w.dest = w.floor > w.from ? w.floor : null;
+    else w.dest = w.pick != null && w.pick >= w.floor ? w.pick : null;
     if (w.dest != null && w.dest !== OUT) behind = Math.max(behind, w.dest + 1);
   }
 }
@@ -1135,7 +1134,7 @@ ACTIONS.help = () =>
         <h4>Scoring in this app</h4>
         <ul>
           <li>Tap what the batter did, then place everyone on base and Confirm.</li>
-          <li>Runners who <em>have</em> to move (because the batter needs their base) are pre-set. You choose for the rest.</li>
+          <li>Nothing is guessed: tap where each runner ended up. Bases they can't be on (because someone behind needs them) are hidden.</li>
           <li>Every play can be undone.</li>
         </ul>
         <h4>Symbols on the sheet</h4>
