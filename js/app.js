@@ -1,6 +1,6 @@
 import {
   newGame, replay, battingTeam, currentInning, halfDone, canBat, canRun,
-  pathClear, batterLimit, total, forcedMoves, lineupOpen,
+  pathClear, batterLimit, total, forcedMoves,
 } from './model.js';
 import { renderGrid, renderSheet, drawCell } from './draw.js';
 import { ICON, esc, sheet, confirmSheet, toast, buzz, viewer } from './ui.js';
@@ -49,7 +49,6 @@ let pending = null; // play being placed before Confirm: {r, rows}
 let upNext = null; // batter picked out of order, else null
 let outPick = false; // runner panel asking where the runner was out
 let lastCommit = 0; // time of the last saved play, to ignore double taps
-let newName = ''; // name typed for a new batter in a live lineup
 let gridTeam = 0;
 let current = 'home';
 
@@ -59,7 +58,6 @@ function go(view, arg) {
   pending = null;
   upNext = null;
   outPick = false;
-  newName = '';
   ({ home: renderHome, intro: renderIntro, setup: renderSetup, score: renderScore, sheet: renderSheetTab, finish: renderFinish })[view](arg);
   window.scrollTo(0, 0);
 }
@@ -321,13 +319,15 @@ ACTIONS.editGame = () => {
     maxOuts: game.maxOuts,
     maxBatters: game.maxBatters,
     strikeouts: game.strikeouts ?? true,
-    teams: game.teams.map((t, i) => ({ name: t.name, color: t.color || COLORS[i], players: [...t.players], live: !!t.live })),
+    teams: game.teams.map((t, i) => ({ name: t.name, color: t.color || COLORS[i], players: [...t.players] })),
     // Events refer to batting positions, so players who have batted keep
     // their spot (they can still be renamed). Batting runs 1, 2, 3… so
     // they are always the first `bats` positions. Once the whole lineup
     // has batted, adding players would change who batted earlier.
-    locked: game.teams.map((t, i) => Math.min(battedUpTo(i), t.players.length)),
-    full: game.teams.map((t, i) => (t.live ? replay(game).teams[i].bats > 0 : replay(game).teams[i].bats >= t.players.length)),
+    // Once play has started, players are renamed here only; adding, removing
+    // and reordering go through Lineup so past plays keep their players.
+    locked: game.teams.map((t) => (game.events.length ? t.players.length : 0)),
+    full: game.teams.map(() => game.events.length > 0),
   };
   draft.preset = presetOf(draft);
   go('setup');
@@ -382,18 +382,13 @@ function setupPlayers() {
   const i = draft.tab;
   const t = draft.teams[i];
   const locked = draft.locked[i];
-  const liveToggle = `
-    <label class="toggle setting live-toggle"><input type="checkbox" id="live-toggle" ${t.live ? 'checked' : ''} ${locked ? 'disabled' : ''}><span></span>
-      <div><b>Set the order as they bat</b><small>Don't know the order? Each new batter takes the next number. Add a name at the plate if you like.</small></div></label>`;
   return `
     <p class="lead">Add players in batting order. Names are optional: leave them blank and players are shown by number (#1, #2…).</p>
     <div class="segmented">${draft.teams.map((tm, k) => `
       <button class="${k === i ? 'on' : ''}" data-action="tab" data-t="${k}" style="--team:${tm.color}">
-        <i></i>${esc(tm.name || (k ? 'Team 2' : 'Team 1'))} <small>${tm.live && !tm.players.length ? 'live' : tm.players.length}</small></button>`).join('')}
+        <i></i>${esc(tm.name || (k ? 'Team 2' : 'Team 1'))} <small>${tm.players.length}</small></button>`).join('')}
     </div>
-    ${liveToggle}
-    ${t.live ? `<p class="hint-line">${t.players.length ? 'These players bat first, then new batters are added as they come up.' : 'Know the first few batters? Add them here (optional).'}</p>` : ''}
-    ${`${draft.full[i] ? (t.live ? '' : `<p class="hint-line">${ICON.lock} The whole lineup has batted, so no more players can be added to this game.</p>`) : `<div class="add-row">
+    ${draft.full[i] ? `<p class="hint-line">${ICON.lock} The game has started: rename players here. To add, remove or reorder, use <b>Lineup</b> on the Score screen.</p>` : `<div class="add-row">
       <input class="input" id="new-player" placeholder="Name (optional)" autocomplete="off" enterkeyhint="done" maxlength="24">
       <button class="btn primary" data-action="addPlayer">${ICON.plus}<span class="sr">Add</span></button>
     </div>`}
@@ -408,8 +403,8 @@ function setupPlayers() {
             : `<span class="grip" data-grip="${k}" role="button" aria-label="Drag to reorder ${esc(p || `player ${k + 1}`)}">${ICON.grip}</span>`}
         </li>`).join('')}
     </ol>
-    ${t.players.length || t.live ? '' : `<div class="empty small"><p>No players yet.</p>
-      <button class="btn ghost" data-action="quickFill">Add 9 numbered players</button></div>`}`}`;
+    ${t.players.length ? '' : `<div class="empty small"><p>No players yet.</p>
+      <button class="btn ghost" data-action="quickFill">Add 9 numbered players</button></div>`}`;
 }
 
 function setupRules() {
@@ -445,10 +440,6 @@ function setupRules() {
 }
 
 function bindSetupInputs() {
-  document.getElementById('live-toggle')?.addEventListener('change', (e) => {
-    draft.teams[draft.tab].live = e.target.checked;
-    renderSetup();
-  });
   app.querySelectorAll('[data-bind]').forEach((el) =>
     el.addEventListener('input', () => {
       const [k, a, b] = el.dataset.bind.split(':');
@@ -578,7 +569,7 @@ ACTIONS.setupNext = () => {
   if (d.step === 1) {
     // Unnamed players are stored blank and shown by batting number.
     d.teams.forEach((t) => (t.players = t.players.map((p) => p.trim())));
-    const empty = d.teams.filter((t) => !t.players.length && !t.live);
+    const empty = d.teams.filter((t) => !t.players.length);
     empty.forEach((t) => (t.players = Array(9).fill('')));
   }
   if (d.step < 2) { d.step++; return renderSetup(); }
@@ -590,7 +581,7 @@ ACTIONS.setupNext = () => {
     maxOuts: d.maxOuts,
     maxBatters: d.maxBatters,
     strikeouts: d.strikeouts,
-    teams: d.teams.map((t) => ({ name: t.name, color: t.color, players: t.players, ...(t.live && { live: true }) })),
+    teams: d.teams.map((t) => ({ name: t.name, color: t.color, players: t.players })),
   };
   if (d.editing) Object.assign(game, opts);
   else { game = newGame(opts); games.push(game); db.persist(); }
@@ -606,11 +597,26 @@ const anyRunners = () => state.runners.some((r) => r != null);
 // Players without a name go by their batting number.
 const playerName = (team, p) => game.teams[team].players[p] || `Batter #${p + 1}`;
 // Who is batting now: the next in order unless another player was picked.
-const batterUp = (bt) => upNext ?? state.teams[bt].next;
-const batEvent = (r) => (upNext != null ? { t: 'bat', r, p: upNext } : { t: 'bat', r });
+// Nobody bats twice in one innings column or while on base, so after a
+// lineup change the next in order may be skipped to the first who can bat.
+function batterUp(bt) {
+  if (upNext != null) return upNext;
+  const T = state.teams[bt];
+  const inning = currentInning(state);
+  const i = T.order.indexOf(T.next);
+  if (i < 0) return T.next;
+  for (let k = 0; k < T.order.length; k++) {
+    const p = T.order[(i + k) % T.order.length];
+    if (!T.cells[inning + ':' + p] && !state.runners.includes(p)) return p;
+  }
+  return T.next;
+}
+const batEvent = (r) => {
+  const bt = battingTeam(state);
+  const p = batterUp(bt);
+  return p !== state.teams[bt].next ? { t: 'bat', r, p } : { t: 'bat', r };
+};
 const tooSoon = () => Date.now() - lastCommit < 600;
-// A live lineup batter coming up for the first time.
-const isNewBatter = (bt, p) => lineupOpen(game, state, bt) && p >= state.teams[bt].seen;
 const shortName = (team, p) => game.teams[team].players[p]?.split(' ')[0] || `#${p + 1}`;
 
 // Phase is derived from the log so undo always lands in the right place.
@@ -630,16 +636,6 @@ function commit(ev, msg) {
 // A play can be several events (batter plus runner moves). They share a
 // group id so Undo takes the whole play back in one tap.
 function commitPlay(evs, msg) {
-  // A live lineup grows a slot (named, if a name was typed) for each new batter.
-  const bt = battingTeam(state);
-  const T = game.teams[bt];
-  for (const ev of evs) {
-    if (ev.t !== 'bat' || !T.live) continue;
-    const p = ev.p ?? state.teams[bt].next;
-    while (T.players.length <= p) T.players.push('');
-    if (newName.trim() && p >= state.teams[bt].seen) T.players[p] = newName.trim().slice(0, 24);
-  }
-  newName = '';
   const g = evs.length > 1 ? 'p' + Date.now().toString(36) : null;
   for (const ev of evs) {
     if (msg) ev.m = msg;
@@ -680,10 +676,6 @@ function undo() {
   if (!game.events.length) return;
   const { g } = game.events.pop();
   while (g && lastEvent()?.g === g) game.events.pop();
-  const st = replay(game);
-  game.teams.forEach((t, i) => {
-    while (t.live && t.players.length > st.teams[i].seen && !t.players[t.players.length - 1]) t.players.pop();
-  });
   save();
   selected = null;
   renderScore();
@@ -839,7 +831,7 @@ function hero(bt) {
       <div class="sb-strip">
         <span class="sb-inn">Runs this innings <b>${state.teams[bt].runs[currentInning(state)] || 0}</b>${plus ? `<em>+${plus}</em>` : ''}</span>
         <span class="sb-outs">Outs <span class="out-dots">${dots}</span></span>
-        <span>Batted <b>${state.batters}</b>${limit === Infinity ? '' : `/${limit}`}</span>
+        <span>Batted <b>${state.batters}</b>/${limit}</span>
       </div>`}
     </section>`;
 }
@@ -965,24 +957,15 @@ function miniDiamond(to) {
     ${to === 4 ? '<circle cx="14" cy="14" r="3.6" class="md-dot"/>' : ''}</svg>`;
 }
 
-// Live lineup: optional name for the new batter, and the way to close the
-// lineup when #1 comes up again (prominent once a usual team has batted).
-function newBatterRow(bt) {
-  const seen = state.teams[bt].seen;
-  return `
-    <input class="input new-name" id="new-name" placeholder="Name (optional)" autocomplete="off" enterkeyhint="done" maxlength="24" value="${esc(newName)}">
-    ${seen ? `<button class="btn ${seen >= 9 ? 'warn' : 'ghost'} lineup-done" data-action="lineupDone">${game.maxBatters > 0 ? `${esc(shortName(bt, 0))} (#1) is up again` : 'Everyone has batted'}: lineup done</button>` : ''}`;
-}
-
 function panel(ph, bt) {
   if (ph === 'bat') {
     const p = batterUp(bt);
     return `
       <section class="panel">
         <div class="batter-row"><span class="num-badge" style="--team:${game.teams[bt].color || COLORS[bt]}">${p + 1}</span>
-          <div><small>${isNewBatter(bt, p) ? 'New batter' : 'Up to bat'}${upNext != null ? ' (out of order)' : ''}</small><h2>${esc(playerName(bt, p))}</h2></div>
-          ${isNewBatter(bt, p) ? '' : `<button class="link-btn not-batter" data-action="pickBatter">Not ${esc(shortName(bt, p))}?</button>`}</div>
-        ${isNewBatter(bt, p) ? newBatterRow(bt) : ''}
+          <div><small>Up to bat${upNext != null ? ' (out of order)' : ''}</small><h2>${esc(playerName(bt, p))}</h2></div>
+          <button class="btn small ghost lineup-btn" data-action="lineup">${ICON.sheet} Lineup</button></div>
+        <button class="link-btn not-batter" data-action="pickBatter">Not ${esc(shortName(bt, p))}? Pick who's batting</button>
         ${coachTip(ph, bt)}
         <h3 class="group safe-t">Safe on</h3>
         <div class="plays hits">${HITS.map((h) => `
@@ -1098,7 +1081,6 @@ function renderScore() {
       ${panel(ph, bt)}
     </main>
     ${ph === 'confirm' ? confirmBar() : tabBar('score')}`;
-  document.getElementById('new-name')?.addEventListener('input', (e) => { newName = e.target.value; });
 }
 
 // ---------- scoresheet tab ----------
@@ -1170,14 +1152,6 @@ ACTIONS.outAt = (el) => {
   renderScore();
 };
 ACTIONS.confirmPlay = () => { if (!tooSoon()) confirmPlay(); };
-ACTIONS.lineupDone = () => {
-  if (tooSoon()) return;
-  const bt = battingTeam(state);
-  newName = '';
-  // Names listed for players who never came up to bat are dropped.
-  game.teams[bt].players.length = state.teams[bt].seen;
-  commit({ t: 'lineup' }, `lineup done, ${state.teams[bt].seen} players`);
-};
 ACTIONS.cancelPlay = () => { pending = null; renderScore(); };
 ACTIONS.pick = (el) => {
   const p = +el.dataset.p;
@@ -1216,25 +1190,116 @@ ACTIONS.extraInnings = () => {
   renderScore();
   toast(`Innings ${game.innings} added`);
 };
+// ---------- lineup changes during the game ----------
+// Edits a draft of one team's batting order, then saves it as one 'order'
+// event (undoable). Players keep their number and sheet row for good, so a
+// late arrival is a new row and a player who left keeps their past boxes.
+function nextAfterChange(team, order) {
+  const T = state.teams[team];
+  // Before the team has batted the first in the order leads off; after that
+  // whoever is up stays up (use Not Sam? to change it) unless they left.
+  if (!T.bats) return order[0];
+  const cur = team === battingTeam(state) ? batterUp(team) : T.next;
+  if (order.includes(cur)) return cur;
+  const i = T.order.indexOf(cur);
+  for (let k = 1; k <= T.order.length; k++) {
+    const p = T.order[(i + k) % T.order.length];
+    if (order.includes(p)) return p;
+  }
+  return order[0];
+}
+
+ACTIONS.lineup = async () => {
+  let team = state.over ? 0 : battingTeam(state);
+  const drafts = game.teams.map((t, i) => ({ names: [...t.players], order: [...state.teams[i].order] }));
+  let el = null;
+  const draw = () => {
+    const d = drafts[team];
+    const color = game.teams[team].color || COLORS[team];
+    const next = d.order.length ? nextAfterChange(team, d.order) : null;
+    const gone = d.names.map((_, p) => p).filter((p) => !d.order.includes(p));
+    const row = (p, k) => `
+      <li class="lu-row ${p === next ? 'next' : ''}">
+        <span class="lu-pos">${k + 1}</span>
+        <span class="num-badge sm" style="--team:${color}">${p + 1}</span>
+        <input class="input bare" data-lu-name="${p}" value="${esc(d.names[p])}" placeholder="#${p + 1}" maxlength="24" aria-label="Player ${p + 1} name">
+        ${p === next ? '<em>Next</em>' : ''}
+        <button class="icon-btn sm" data-lu="up" data-k="${k}" ${k ? '' : 'disabled'} aria-label="Bat earlier">${ICON.up}</button>
+        <button class="icon-btn sm" data-lu="down" data-k="${k}" ${k < d.order.length - 1 ? '' : 'disabled'} aria-label="Bat later">${ICON.down}</button>
+        <button class="btn small out" data-lu="left" data-k="${k}">Left</button>
+      </li>`;
+    el.querySelector('.bsheet-body').innerHTML = `
+      <div class="segmented">${game.teams.map((t, i) => `<button class="${i === team ? 'on' : ''}" data-lu="team" data-t="${i}" style="--team:${t.color || COLORS[i]}"><i></i><span class="seg-name">${esc(t.name)}</span></button>`).join('')}</div>
+      <p class="muted">Changes apply from the next batter. Plays already recorded keep their players.</p>
+      <ol class="lu-list">${d.order.map(row).join('')}</ol>
+      <div class="add-row"><input class="input" id="lu-new" placeholder="Late arrival: name (optional)" maxlength="24" autocomplete="off">
+        <button class="btn primary" data-lu="add">${ICON.plus}<span class="sr">Add</span></button></div>
+      ${gone.length ? `<h4 class="lu-h">Left the game</h4><ul class="lu-list">${gone.map((p) => `
+        <li class="lu-row gone"><span class="num-badge sm" style="--team:${color}">${p + 1}</span><span class="lu-name">${esc(d.names[p] || `#${p + 1}`)}</span>
+          <button class="btn small ghost" data-lu="back" data-p="${p}">Back in</button></li>`).join('')}</ul>` : ''}`;
+  };
+  const v = await sheet({
+    title: 'Lineup',
+    actions: [{ label: 'Cancel', kind: 'ghost', value: null }, { label: 'Save lineup', kind: 'primary', value: 'save' }],
+    onOpen(sh) {
+      el = sh;
+      draw();
+      sh.addEventListener('input', (e) => {
+        const k = e.target.dataset.luName;
+        if (k != null) drafts[team].names[+k] = e.target.value;
+      });
+      sh.addEventListener('click', (e) => {
+        const b = e.target.closest('[data-lu]');
+        if (!b) return;
+        const d = drafts[team];
+        const k = +b.dataset.k;
+        const a = b.dataset.lu;
+        if (a === 'team') team = +b.dataset.t;
+        if (a === 'up') [d.order[k - 1], d.order[k]] = [d.order[k], d.order[k - 1]];
+        if (a === 'down') [d.order[k + 1], d.order[k]] = [d.order[k], d.order[k + 1]];
+        if (a === 'left') {
+          if (d.order.length === 1) return toast('Keep at least one player in the lineup');
+          d.order.splice(k, 1);
+        }
+        if (a === 'back') d.order.push(+b.dataset.p);
+        if (a === 'add') {
+          d.names.push(sh.querySelector('#lu-new').value.trim());
+          d.order.push(d.names.length - 1);
+        }
+        draw();
+        if (a === 'add') sh.querySelector('#lu-new').focus();
+      });
+    },
+  });
+  if (v !== 'save') return;
+  const evs = [];
+  drafts.forEach((d, i) => {
+    const t = game.teams[i];
+    if (d.names.length > t.players.length) t.start ??= t.players.length;
+    t.players = d.names.map((n) => n.trim().slice(0, 24));
+    if (d.order.join() !== state.teams[i].order.join()) evs.push({ t: 'order', team: i, order: d.order, next: nextAfterChange(i, d.order) });
+  });
+  upNext = null;
+  if (evs.length) commitPlay(evs, 'lineup changed');
+  else { save(); renderScore(); }
+};
+
 // Batting out of order: choose who is really up. Only players who haven't
 // batted this innings, since each gets one box per innings on the sheet.
 ACTIONS.pickBatter = async () => {
   const bt = battingTeam(state);
   const inning = currentInning(state);
   const cells = state.teams[bt].cells;
-  const slots = Math.max(game.teams[bt].players.length, state.teams[bt].seen + (lineupOpen(game, state, bt) ? 1 : 0));
-  const free = Array.from({ length: slots }, (_, p) => p).filter((p) => !cells[inning + ':' + p] && !state.runners.includes(p));
+  const free = state.teams[bt].order.filter((p) => !cells[inning + ':' + p] && !state.runners.includes(p));
   const color = game.teams[bt].color || COLORS[bt];
   const v = await sheet({
     title: 'Who is batting?',
     body: `<p class="muted">Pick the player at the plate. The batting order carries on after them.</p>
       <div class="menu-list">${free.map((p, i) => `<button class="menu-item ${p === batterUp(bt) ? 'on' : ''}" data-i="${i}">
-        <span class="num-badge sm" style="--team:${color}">${p + 1}</span><span><b>${esc(playerName(bt, p))}</b>${p === state.teams[bt].next ? '<small>Next in order</small>' : ''}</span></button>`).join('')}
-        ${lineupOpen(game, state, bt) && state.teams[bt].seen ? `<button class="menu-item" data-i="${free.length}"><span class="num-badge sm" style="--team:${color}">1</span><span><b>Lineup done</b><small>Everyone has batted once</small></span></button>` : ''}</div>`,
-    actions: [...free.map((p) => ({ value: p })), { value: 'L' }],
+        <span class="num-badge sm" style="--team:${color}">${p + 1}</span><span><b>${esc(playerName(bt, p))}</b>${p === state.teams[bt].next ? '<small>Next in order</small>' : ''}</span></button>`).join('')}</div>`,
+    actions: free.map((p) => ({ value: p })),
   });
   if (v == null) return;
-  if (v === 'L') return ACTIONS.lineupDone();
   upNext = v === state.teams[bt].next ? null : v;
   renderScore();
 };
@@ -1246,13 +1311,15 @@ ACTIONS.menu = async () => {
     title: 'Game options',
     body: '<div class="menu-list">' +
       `<button class="menu-item" data-i="4">${ICON.help}<span><b>Help</b><small>Game day guide, rules and symbols</small></span></button>` +
-      `<button class="menu-item" data-i="0">${ICON.edit}<span><b>Edit game</b><small>Names, players, innings, rules</small></span></button>` +
+      (state.over ? '' : `<button class="menu-item" data-i="5">${ICON.sheet}<span><b>Lineup</b><small>Late arrival, player left, batting order</small></span></button>`) +
+      `<button class="menu-item" data-i="0">${ICON.edit}<span><b>Edit game</b><small>Names, innings, rules</small></span></button>` +
       (state.over ? '' : `<button class="menu-item" data-i="1">${ICON.flag}<span><b>End innings now</b><small>Before the limit is reached</small></span></button>`) +
       (state.over ? '' : `<button class="menu-item" data-i="2">${ICON.whistle}<span><b>End game now</b><small>E.g. time ran out</small></span></button>`) +
       `<button class="menu-item danger" data-i="3">${ICON.trash}<span><b>Delete game</b></span></button></div>`,
-    actions: [{ value: 'edit' }, { value: 'endHalf' }, { value: 'over' }, { value: 'delete' }, { value: 'help' }],
+    actions: [{ value: 'edit' }, { value: 'endHalf' }, { value: 'over' }, { value: 'delete' }, { value: 'help' }, { value: 'lineup' }],
   });
   if (v === 'help') ACTIONS.help();
+  if (v === 'lineup') ACTIONS.lineup();
   if (v === 'edit') ACTIONS.editGame();
   if (v === 'endHalf' && await confirmSheet('End this innings?', "The limit hasn't been reached yet. The other team will bat next.", 'End innings'))
     ACTIONS.endHalf();
@@ -1291,7 +1358,6 @@ ACTIONS.help = () =>
           <ul>
             <li>Set up the game at home: teams in batting order and the innings rule.</li>
             <li>Install the app so it works with no signal.</li>
-            <li>Don't know the batting order? Switch on <b>Set the order as they bat</b>. Each new batter takes the next number (add a name if you like). Tap <b>Lineup done</b> when everyone has batted once.</li>
           </ul>
           <h5>Each batter</h5>
           <ul>
@@ -1300,6 +1366,7 @@ ACTIONS.help = () =>
             <li>Tapped <b>Out</b>? Also tap the base they were out at.</li>
             <li>Check the diamond preview, then <b>Confirm</b>. A banner repeats what was saved, with <b>Undo</b>.</li>
             <li>Wrong child at the plate? Tap <b>Not Sam?</b> next to their name and pick who is batting.</li>
+            <li>Late arrival, someone left, or the order was wrong? Tap <b>Lineup</b> next to the batter. Changes apply from the next batter and never alter plays already saved.</li>
             <li>Stand where you can see every base. A helper calling out plays makes it easy.</li>
           </ul>
           <h5>Fixing mistakes</h5>

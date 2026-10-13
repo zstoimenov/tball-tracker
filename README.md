@@ -19,9 +19,9 @@ through the phone's share sheet.
   (runs on the play that makes the last out), every saved play is repeated in
   a banner with Undo, and double taps are ignored.
 - "Not Sam?" picks the real batter when a child bats out of order.
-- Live batting order: when the lineup isn't known, each new batter takes the
-  next number (name optional) until Lineup done; the order then repeats and is
-  saved with the game, and the next game starts from it.
+- Lineup (Score screen): add a late arrival, mark a player who left, or fix the
+  order from the next batter on. Saved as one undoable step; recorded plays keep
+  their players, and nobody is called twice in an innings.
 - Innings over shows who scored and who was out, to check with the umpire.
 - "Play another innings" at the end, so the length needn't be fixed up front.
 - Three tabs: Score, Sheet (the paper sheet, fitted to the phone width) and Share.

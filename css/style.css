@@ -401,10 +401,19 @@ main.score { padding-top: 12px; }
 .alt-row .btn svg { width: 18px; height: 18px; }
 .toast.rec { border: 2px solid var(--accent); }
 .toast.rec button { padding: 10px 18px; font-size: 16px; background: var(--accent); color: var(--accent-ink); }
-.new-name { width: 100%; margin: 0 0 8px; }
-.lineup-done { width: 100%; min-height: 44px; margin: 0 0 4px; font-size: 14px; }
-.btn.warn { background: var(--warn-bg); color: var(--warn-ink); border: 2px solid #f5a524; }
-.live-toggle { margin: 10px 0 12px; }
+.lineup-btn { flex: none; gap: 6px; }
+.lineup-btn svg { width: 16px; height: 16px; }
+.batter-row + .not-batter, .panel .not-batter { margin: -2px 0 8px 56px; font-size: 13px; text-align: left; }
+.lu-list { list-style: none; margin: 8px 0; padding: 0; display: grid; gap: 6px; }
+.lu-row { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 12px; background: var(--surface-2); }
+.lu-row.next { outline: 2px solid var(--accent); }
+.lu-row .input { flex: 1; min-width: 0; }
+.lu-row em { flex: none; font-style: normal; font-size: 11px; font-weight: 900; text-transform: uppercase; padding: 2px 6px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); }
+.lu-row .btn.small { min-height: 34px; padding: 4px 10px; font-size: 13px; }
+.lu-row .icon-btn:disabled { opacity: .3; }
+.lu-pos { flex: none; width: 18px; text-align: center; font-weight: 800; color: var(--muted); font-size: 13px; }
+.lu-name { flex: 1; font-weight: 700; }
+.lu-h { margin: 14px 0 4px; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
 .confirm-bar { flex-direction: column; gap: 6px; padding-top: 8px; }
 .confirm-bar .play-problem { margin: 0 auto; max-width: 608px; text-align: center; color: var(--out-ink); font-weight: 700; font-size: 14px; }
 .confirm-row { display: flex; gap: 8px; width: 100%; max-width: 608px; margin: 0 auto; }
