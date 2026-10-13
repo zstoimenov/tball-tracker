@@ -401,6 +401,10 @@ main.score { padding-top: 12px; }
 .alt-row .btn svg { width: 18px; height: 18px; }
 .toast.rec { border: 2px solid var(--accent); }
 .toast.rec button { padding: 10px 18px; font-size: 16px; background: var(--accent); color: var(--accent-ink); }
+.new-name { width: 100%; margin: 0 0 8px; }
+.lineup-done { width: 100%; min-height: 44px; margin: 0 0 4px; font-size: 14px; }
+.btn.warn { background: var(--warn-bg); color: var(--warn-ink); border: 2px solid #f5a524; }
+.live-toggle { margin: 10px 0 12px; }
 .confirm-bar { flex-direction: column; gap: 6px; padding-top: 8px; }
 .confirm-bar .play-problem { margin: 0 auto; max-width: 608px; text-align: center; color: var(--out-ink); font-weight: 700; font-size: 14px; }
 .confirm-row { display: flex; gap: 8px; width: 100%; max-width: 608px; margin: 0 auto; }

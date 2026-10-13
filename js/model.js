@@ -10,6 +10,7 @@
 //   {t:'adv', p, to}            runner (player index p) advances to base `to`
 //   {t:'rout', p, at?}          runner p put out on the bases, at base `at`
 //                               (bases before it count as reached)
+//   {t:'lineup'}                live lineup complete: #1 is up again
 //   {t:'end'}                   end of the half innings
 //   {t:'over'}                  game ended early
 
@@ -25,16 +26,25 @@ export function newGame(opts) {
     maxOuts: opts.maxOuts,
     maxBatters: opts.maxBatters,
     strikeouts: opts.strikeouts !== false,
-    teams: opts.teams, // [{name, players:[names]}], teams[0] bats first
+    teams: opts.teams, // [{name, players:[names], live?}], teams[0] bats first
+    // live: the batting order is built as players come up to bat for the
+    // first time, until a {t:'lineup'} event says #1 is up again.
     events: [],
     signature: null,
   };
 }
 
+// Players in the lineup, or null while a live lineup is still being built.
+export function lineupSize(game, s, team) {
+  return game.teams[team].live ? s.teams[team].size : game.teams[team].players.length;
+}
+export const lineupOpen = (game, s, team) => lineupSize(game, s, team) == null;
+
 // Batters allowed per half. 0 means "whole lineup"; never more than the
-// lineup so a batter cannot need two boxes in one innings column.
-export function batterLimit(game, team) {
-  const n = game.teams[team].players.length;
+// lineup so a batter cannot need two boxes in one innings column. An open
+// live lineup has no known size yet.
+export function batterLimit(game, team, s) {
+  const n = (s ? lineupSize(game, s, team) : game.teams[team].players.length) ?? Infinity;
   return game.maxBatters > 0 ? Math.min(game.maxBatters, n) : n;
 }
 
@@ -45,6 +55,9 @@ export function replay(game) {
     next: 0, // next batter index
     bats: 0, // plate appearances so far
     breaks: [], // {inning, player}: diagonal marking first batter of next innings
+    seen: 0, // batting positions used so far (highest + 1)
+    size: null, // live lineup size once complete
+    last: null, // last batter
   }));
   const s = {
     teams,
@@ -117,8 +130,11 @@ function apply(game, s, ev) {
 
   if (ev.t === 'bat') {
     const p = ev.p ?? T.next;
+    const n = lineupSize(game, s, team);
     T.bats++;
-    T.next = (p + 1) % game.teams[team].players.length;
+    T.next = n ? (p + 1) % n : p + 1;
+    T.seen = Math.max(T.seen, p + 1);
+    T.last = p;
     s.batters++;
     cellOf(s, team, inning, p);
     if (typeof ev.r === 'number') {
@@ -143,6 +159,11 @@ function apply(game, s, ev) {
       for (let b = from; b < Math.min(ev.at || 0, 4) - 1; b++) c.segs.push({ from: b, to: b + 1 });
       recordOut(s, team, inning, ev.p, 'R');
     }
+  } else if (ev.t === 'lineup') {
+    if (game.teams[team].live && T.size == null) {
+      T.size = T.seen;
+      T.next = 0;
+    }
   } else if (ev.t === 'end') {
     T.runs[inning] ||= 0;
     T.breaks.push({ inning, player: T.next });
@@ -160,7 +181,7 @@ function apply(game, s, ev) {
 // Why the current half should end, or null.
 export function halfDone(game, s) {
   if (game.maxOuts > 0 && s.outs >= game.maxOuts) return game.maxOuts + (game.maxOuts === 1 ? ' out' : ' outs');
-  if (s.batters >= batterLimit(game, battingTeam(s))) return s.batters + ' players have batted';
+  if (s.batters >= batterLimit(game, battingTeam(s), s)) return s.batters + ' players have batted';
   return null;
 }
 
