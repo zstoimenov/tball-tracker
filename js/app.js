@@ -1,6 +1,6 @@
 import {
   newGame, replay, battingTeam, currentInning, halfDone, canBat, canRun,
-  pathClear, batterLimit, total,
+  pathClear, batterLimit, total, forcedMoves,
 } from './model.js';
 import { renderGrid, renderSheet, drawCell } from './draw.js';
 import { ICON, esc, sheet, confirmSheet, toast, buzz, viewer } from './ui.js';
@@ -45,12 +45,14 @@ let game = null;
 let state = null;
 let draft = null; // setup wizard
 let selected = null; // selected runner (player index)
+let pending = null; // play being placed before Confirm: {r, rows}
 let gridTeam = 0;
 let current = 'home';
 
 function go(view, arg) {
   current = view;
   selected = null;
+  pending = null;
   ({ home: renderHome, intro: renderIntro, setup: renderSetup, score: renderScore, sheet: renderSheetTab, finish: renderFinish })[view](arg);
   window.scrollTo(0, 0);
 }
@@ -90,7 +92,7 @@ const ART = {
 };
 const SLIDES = [
   { art: ART.tap, title: 'Score with taps', text: 'For each batter, tap what happened: a hit to a base, or how they got out. No scoring knowledge needed.' },
-  { art: ART.diamond, title: 'Runners on the diamond', text: 'Players on base appear on the diamond. Tap one to move them when they run further, or to mark them out.' },
+  { art: ART.diamond, title: 'Runners on the diamond', text: 'After each hit, the app lists everyone on base. Tap where each one ended up, then Confirm. Home means they scored.' },
   { art: ART.share, title: 'Share the paper sheet', text: 'The app draws the official tee-ball scoresheet as you go. At the end the umpire signs and you share it in one tap.' },
 ];
 
@@ -584,10 +586,7 @@ const shortName = (team, p) => game.teams[team].players[p]?.split(' ')[0] || `#$
 // Phase is derived from the log so undo always lands in the right place.
 function phase() {
   if (state.over) return 'over';
-  const ev = lastEvent();
-  // Runners can't advance on a strikeout or a catch, so skip the question.
-  const inPlay = ev && (ev.t === 'adv' || ev.t === 'rout' || (ev.t === 'bat' && ev.r !== 'K' && ev.r !== 'C'));
-  if (inPlay && anyRunners() && canRun(game, state)) return 'runners';
+  if (pending) return 'confirm';
   if (halfDone(game, state)) return 'inningsOver';
   return 'bat';
 }
@@ -595,10 +594,21 @@ function phase() {
 // The description is stored on the event and shown in the top bar next to
 // Undo, so no pop-up ever covers the screen.
 function commit(ev, msg) {
-  if (msg) ev.m = msg;
-  game.events.push(ev);
+  commitPlay([ev], msg);
+}
+
+// A play can be several events (batter plus runner moves). They share a
+// group id so Undo takes the whole play back in one tap.
+function commitPlay(evs, msg) {
+  const g = evs.length > 1 ? 'p' + Date.now().toString(36) : null;
+  for (const ev of evs) {
+    if (msg) ev.m = msg;
+    if (g) ev.g = g;
+    game.events.push(ev);
+  }
   save();
   selected = null;
+  pending = null;
   buzz();
   renderScore();
 }
@@ -618,8 +628,10 @@ const tabBar = (active) => `
   </nav>`;
 
 function undo() {
+  if (pending) { pending = null; renderScore(); return; }
   if (!game.events.length) return;
-  game.events.pop();
+  const { g } = game.events.pop();
+  while (g && lastEvent()?.g === g) game.events.pop();
   save();
   selected = null;
   renderScore();
@@ -630,17 +642,81 @@ function coachTip(ph, bt) {
   const name = esc(playerName(bt, state.teams[bt].next));
   const text = {
     bat: game.events.length === 0
-      ? 'Tap where the batter got to, or how they got out.'
+      ? 'Tap where the batter got to, or how they got out. You place the other runners next.'
       : `Tap where <b>${name}</b> got to, or how they got out.`,
-    runners: 'Tap a runner on the diamond if they ran further or got out.',
+    confirm: 'Tap where each runner ended up, then Confirm. <b>Home</b> means they scored.',
     inningsOver: 'Tell the umpire, then swap: the other team bats now.',
     over: 'Get the umpire to check and sign the scoresheet, then share it.',
   }[ph];
   return `<div class="coach">${ICON.bulb}<p>${text}</p><button class="icon-btn sm" data-action="hideTips" aria-label="Hide tips">${ICON.x}</button></div>`;
 }
 
+// ---------- placing a play ----------
+// After the batter's result, every runner gets a row. The batter is set to
+// the base tapped and forced runners to the least they had to run; anyone
+// else must be placed explicitly, since tee-ball runners vary so much.
+const OUT = -1;
+
+function startPlay(r) {
+  const forced = typeof r === 'number' ? new Map(forcedMoves(state, r).map(([p, , to]) => [p, to])) : new Map();
+  const rows = [];
+  for (let b = 3; b >= 1; b--) {
+    const p = state.runners[b];
+    if (p == null) continue;
+    const min = forced.get(p);
+    rows.push({ p, from: b, min: min ?? b, forced: min != null, dest: min ?? null });
+  }
+  if (typeof r === 'number') {
+    const bt = battingTeam(state);
+    rows.push({ p: state.teams[bt].next, from: 0, min: r, forced: true, dest: r, batter: true });
+  }
+  pending = { r, rows };
+}
+
+// Rows are lead runner first. Returns a message when the placement can't
+// happen on a real field, else null.
+function playProblem(rows) {
+  const bt = battingTeam(state);
+  const live = rows.filter((w) => w.dest !== OUT);
+  for (let i = 0; i < live.length; i++) {
+    for (let j = i + 1; j < live.length; j++) {
+      const a = live[i];
+      const b = live[j];
+      if (a.dest === 4) continue;
+      if (b.dest === a.dest) return `${shortName(bt, a.p)} and ${shortName(bt, b.p)} can't both be on ${BASE[a.dest]}.`;
+      if (b.dest > a.dest) return `${shortName(bt, b.p)} can't pass ${shortName(bt, a.p)}.`;
+    }
+  }
+  return null;
+}
+
+function playSummary() {
+  const bt = battingTeam(state);
+  const batter = shortName(bt, state.teams[bt].next);
+  const { r, rows } = pending;
+  const parts = [];
+  const b = rows.find((w) => w.batter);
+  if (!b) parts.push(`${batter} ${OUTS.find((o) => o.r === r).label.toLowerCase()}`);
+  for (const w of [...rows].reverse()) {
+    if (!w.batter && w.dest === w.from) continue;
+    const n = shortName(bt, w.p);
+    parts.push(w.dest === OUT ? `${n} out` : w.dest === 4 ? `${n} scored` : `${n} to ${BASE[w.dest]}`);
+  }
+  return parts.join(', ');
+}
+
+function confirmPlay() {
+  const { r, rows } = pending;
+  const evs = [{ t: 'bat', r }];
+  for (const w of rows) if (w.dest === OUT) evs.push({ t: 'rout', p: w.p });
+  // Lead runner first so nobody lands on a base that is still occupied.
+  for (const w of rows) if (w.dest !== OUT && w.dest > w.min) evs.push({ t: 'adv', p: w.p, to: w.dest });
+  commitPlay(evs, playSummary());
+}
+
 function hero(bt) {
   const limit = batterLimit(game, bt);
+  const plus = pending ? pending.rows.filter((w) => w.dest === 4).length : 0;
   const dots = game.maxOuts
     ? Array.from({ length: game.maxOuts }, (_, k) => `<i class="${k < state.outs ? 'on' : ''}"></i>`).join('')
     : `<b>${state.outs}</b>`;
@@ -655,7 +731,7 @@ function hero(bt) {
       <div class="sb-teams">${team(0)}${team(1)}</div>
       ${state.over ? '' : `
       <div class="sb-strip">
-        <span>Innings <b>${currentInning(state) + 1}</b>/${game.innings}</span>
+        <span class="sb-inn">Runs this innings <b>${state.teams[bt].runs[currentInning(state)] || 0}</b>${plus ? `<em>+${plus}</em>` : ''}</span>
         <span class="sb-outs">Outs <span class="out-dots">${dots}</span></span>
         <span>Batted <b>${state.batters}</b>/${limit}</span>
       </div>`}
@@ -673,6 +749,7 @@ function diamond(bt, ph) {
     const from = state.runners.indexOf(selected);
     for (let to = from + 1; to <= 4; to++) if (pathClear(state, from, to)) targets.add(to % 4);
   }
+  if (pending) return previewDiamond(bt);
   const ev = lastEvent();
   const moved = ev?.t === 'adv' ? ev.p : ev?.t === 'bat' ? (state.teams[bt].next - 1 + game.teams[bt].players.length) % game.teams[bt].players.length : null;
   const chips = [];
@@ -720,7 +797,50 @@ function diamond(bt, ph) {
         </svg>
         ${chips.join('')}
       </div>
-      ${actionRow}
+      ${actionRow || (anyRunners() && runOk && ph === 'bat' ? '<p class="field-hint">Runner moved later (steal, overthrow)? Tap them.</p>' : '')}
+    </section>`;
+}
+
+// SVG points of bases 0..3, with 4 = home again.
+const SVG_BASE = [[150, 220], [255, 130], [150, 40], [45, 130], [150, 220]];
+
+function previewDiamond(bt) {
+  const color = game.teams[bt].color || COLORS[bt];
+  const arrows = [];
+  const chips = [];
+  const scored = [];
+  const outs = [];
+  for (const w of pending.rows) {
+    const named = game.teams[bt].players[w.p];
+    const label = `<span>${w.p + 1}</span>${named ? `<em>${esc(shortName(bt, w.p))}</em>` : ''}`;
+    if (w.dest === OUT) { outs.push(esc(shortName(bt, w.p))); continue; }
+    if (w.dest != null && w.dest > w.from) {
+      const pts = SVG_BASE.slice(w.from, w.dest + 1).map((q) => q.join(' '));
+      arrows.push(`<path d="M${pts.join('L')}" class="run-arrow"/>`);
+    }
+    if (w.dest === 4) { scored.push(esc(shortName(bt, w.p))); continue; }
+    const at = w.dest ?? w.from;
+    chips.push(`<div class="chip ${named ? '' : 'num-only'} ${w.dest == null ? 'ask' : ''} ${w.batter ? 'batter' : ''}" style="left:${POS[at][0]}%;top:${POS[at][1]}%;--team:${color}">${label}</div>`);
+  }
+  const base = (x, y, b) => b ? `<rect x="${x - 8}" y="${y - 8}" width="16" height="16" rx="2" transform="rotate(45 ${x} ${y})" class="pbase"/>` : `<path d="M${x - 9} ${y - 7}h18v7l-9 8-9-8z" class="pbase"/>`;
+  const tray = scored.length || outs.length
+    ? `<div class="tray">${scored.length ? `<span class="tray-run">${ICON.ball} Scored: <b>${scored.join(', ')}</b></span>` : ''}${outs.length ? `<span class="tray-out">Out: <b>${outs.join(', ')}</b></span>` : ''}</div>`
+    : '';
+  return `
+    <section class="field-card">
+      <div class="field">
+        <svg viewBox="0 0 300 250" aria-hidden="true">
+          <defs><marker id="ah" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0L10 5 0 10z" fill="#c6f432"/></marker></defs>
+          <path d="M150 242L12 104A196 196 0 0 1 288 104Z" class="grass"/>
+          <path d="M150 220L255 130 150 40 45 130Z" class="dirt"/>
+          <path d="M150 220L255 130 150 40 45 130Z" class="lines"/>
+          <circle cx="150" cy="140" r="11" class="mound"/>
+          ${base(255, 130, 1)}${base(150, 40, 2)}${base(45, 130, 3)}${base(150, 220, 0)}
+          ${arrows.join('')}
+        </svg>
+        ${chips.join('')}
+      </div>
+      ${tray}
     </section>`;
 }
 
@@ -750,14 +870,32 @@ function panel(ph, bt) {
         </div>
       </section>`;
   }
-  if (ph === 'runners') {
-    const reason = halfDone(game, state);
-    const next = state.teams[bt].next;
+  if (ph === 'confirm') {
+    const color = game.teams[bt].color || COLORS[bt];
+    const rows = pending.rows.map((w, i) => {
+      const opts = [];
+      if (!w.forced) opts.push([w.from, 'Stayed']);
+      for (let to = Math.max(w.min, w.from + 1); to <= 4; to++) opts.push([to, to === 4 ? 'Home' : BASE[to]]);
+      opts.push([OUT, 'Out']);
+      const note = w.batter ? 'Batter' : `Was on ${BASE[w.from]}${w.forced ? ', had to run' : ''}`;
+      return `
+        <div class="move ${w.dest == null ? 'ask' : ''}">
+          <div class="move-who"><span class="num-badge sm" style="--team:${color}">${w.p + 1}</span>
+            <div><b>${esc(playerName(bt, w.p))}</b><small>${note}</small></div></div>
+          <div class="opts">${opts.map(([to, l]) => `<button class="opt ${to === OUT ? 'out' : to === 4 ? 'home' : ''} ${w.dest === to ? 'on' : ''}" data-action="dest" data-i="${i}" data-to="${to}" aria-pressed="${w.dest === to}">${l}</button>`).join('')}</div>
+        </div>`;
+    }).join('');
+    const missing = pending.rows.filter((w) => w.dest == null).length;
+    const problem = missing ? null : playProblem(pending.rows);
+    const b = state.teams[bt].next;
+    const head = typeof pending.r === 'number'
+      ? `${esc(shortName(bt, b))} ${pending.r === 4 ? 'hit a home run' : `safe on ${BASE[pending.r]}`}`
+      : `${esc(shortName(bt, b))} ${OUTS.find((o) => o.r === pending.r).label.toLowerCase()}`;
     return `
       <section class="panel">
-        <div class="panel-head"><small>After the play</small><h2>Any runners go further?</h2></div>
+        <div class="panel-head"><small>${head}</small><h2>Where did everyone end up?</h2></div>
         ${coachTip(ph, bt)}
-        <button class="btn primary big" data-action="next">${reason ? 'Done: end of innings' : `Next batter: ${esc(shortName(bt, next))}`} ${ICON.chevron}</button>
+        <div class="moves">${rows}</div>
       </section>`;
   }
   if (ph === 'inningsOver') {
@@ -782,6 +920,21 @@ function panel(ph, bt) {
     </section>`;
 }
 
+// While placing runners the tabs give way to Back / Confirm, so Confirm is
+// always on screen however many runners there are.
+function confirmBar() {
+  const missing = pending.rows.filter((w) => w.dest == null).length;
+  const problem = missing ? null : playProblem(pending.rows);
+  return `
+    <nav class="bottom-bar confirm-bar">
+      ${problem ? `<p class="play-problem">${esc(problem)}</p>` : ''}
+      <div class="confirm-row">
+        <button class="btn ghost" data-action="cancelPlay">Back</button>
+        <button class="btn primary grow" data-action="confirmPlay" ${missing || problem ? 'disabled' : ''}>${missing ? `Place ${missing} more runner${missing > 1 ? 's' : ''}` : `Confirm ${ICON.check}`}</button>
+      </div>
+    </nav>`;
+}
+
 function renderScore() {
   state = replay(game);
   const bt = battingTeam(state);
@@ -796,7 +949,7 @@ function renderScore() {
       ${state.over ? '' : diamond(bt, ph)}
       ${panel(ph, bt)}
     </main>
-    ${tabBar('score')}`;
+    ${ph === 'confirm' ? confirmBar() : tabBar('score')}`;
 }
 
 // ---------- scoresheet tab ----------
@@ -845,8 +998,22 @@ ACTIONS.bat = (el) => {
   const bt = battingTeam(state);
   const name = shortName(bt, state.teams[bt].next);
   const label = typeof r === 'number' ? (r === 4 ? 'home run' : `safe on ${BASE[r]}`) : OUTS.find((o) => o.r === r).label.toLowerCase();
-  commit({ t: 'bat', r }, `${name} ${label}`);
+  // Runners only need placing if the ball was in play, someone is on base,
+  // and the play didn't make the last out.
+  const lastOut = r === 'T' && game.maxOuts > 0 && state.outs + 1 >= game.maxOuts;
+  if (r === 'K' || r === 'C' || lastOut || !anyRunners()) return commit({ t: 'bat', r }, `${name} ${label}`);
+  selected = null;
+  startPlay(r);
+  buzz(6);
+  renderScore();
 };
+ACTIONS.dest = (el) => {
+  pending.rows[+el.dataset.i].dest = +el.dataset.to;
+  buzz(6);
+  renderScore();
+};
+ACTIONS.confirmPlay = () => confirmPlay();
+ACTIONS.cancelPlay = () => { pending = null; renderScore(); };
 ACTIONS.pick = (el) => {
   const p = +el.dataset.p;
   selected = selected === p ? null : p;

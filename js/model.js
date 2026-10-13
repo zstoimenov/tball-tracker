@@ -88,6 +88,24 @@ function recordOut(s, team, inning, p, how) {
   c.how = how;
 }
 
+// Runners pushed ahead when the batter reaches base `r`, as [player, from, to],
+// trailing runner first.
+export function forcedMoves(s, r) {
+  const forced = [];
+  let need = r;
+  for (let b = 1; b <= 3; b++) {
+    const p = s.runners[b];
+    if (p == null) continue;
+    if (b <= need) {
+      need = Math.min(need + 1, 4);
+      forced.push([p, b, need]);
+    } else {
+      need = b;
+    }
+  }
+  return forced;
+}
+
 function apply(game, s, ev) {
   if (s.over) return;
   const team = battingTeam(s);
@@ -104,19 +122,7 @@ function apply(game, s, ev) {
       // Runners the batter passes or lands on are forced ahead of them.
       // Targets are worked out trailing runner first, then applied lead
       // runner first so nobody lands on a base that is still occupied.
-      const forced = [];
-      let need = ev.r;
-      for (let b = 1; b <= 3; b++) {
-        const r = s.runners[b];
-        if (r == null) continue;
-        if (b <= need) {
-          need = Math.min(need + 1, 4);
-          forced.push([r, b, need]);
-        } else {
-          need = b;
-        }
-      }
-      for (const [r, from, to] of forced.reverse()) move(s, team, inning, r, from, to);
+      for (const [r, from, to] of forcedMoves(s, ev.r).reverse()) move(s, team, inning, r, from, to);
       move(s, team, inning, p, 0, ev.r);
     } else {
       recordOut(s, team, inning, p, ev.r);
