@@ -683,11 +683,16 @@ function settle() {
   let behind = 0; // lowest base still free for the next runner ahead
   for (const w of [...pending.rows].reverse()) {
     w.floor = Math.max(w.min, Math.min(behind, 4));
-    if (w.pick === OUT) w.dest = OUT;
-    else w.dest = w.pick != null && w.pick >= w.floor ? w.pick : null;
+    if (w.pick === OUT) {
+      w.dest = OUT;
+      const bases = outBases(w);
+      if (bases.length === 1) w.outAt = bases[0];
+    } else w.dest = w.pick != null && w.pick >= w.floor ? w.pick : null;
     if (w.dest != null && w.dest !== OUT) behind = Math.max(behind, w.dest + 1);
   }
 }
+
+const unplaced = (w) => w.dest == null || (w.dest === OUT && !w.outAt);
 
 // Rows are lead runner first. Returns a message when the placement can't
 // happen on a real field, else null.
@@ -706,6 +711,14 @@ function playProblem(rows) {
   return null;
 }
 
+// Bases a row's runner could have been put out at. A batter has already
+// reached the base hit; a runner is out at the earliest on the next base.
+const outBases = (w) => {
+  const first = (w.batter ? pending.r : w.from) + 1;
+  return Array.from({ length: Math.max(0, 5 - first) }, (_, k) => first + k);
+};
+const outText = (b) => (b === 4 ? 'home' : BASE[b]);
+
 function playSummary() {
   const bt = battingTeam(state);
   const batter = shortName(bt, state.teams[bt].next);
@@ -716,7 +729,7 @@ function playSummary() {
   for (const w of [...rows].reverse()) {
     if (!w.batter && w.dest === w.from) continue;
     const n = shortName(bt, w.p);
-    parts.push(w.dest === OUT ? `${n} out` : w.dest === 4 ? `${n} scored` : `${n} to ${BASE[w.dest]}`);
+    parts.push(w.dest === OUT ? `${n} out at ${outText(w.outAt)}` : w.dest === 4 ? `${n} scored` : `${n} to ${BASE[w.dest]}`);
   }
   return parts.join(', ');
 }
@@ -726,10 +739,10 @@ function confirmPlay() {
   // Runners put out are taken off their starting base before the hit is
   // applied, so the sheet never shows them reaching a base they were out at.
   const runnersOut = rows.filter((w) => !w.batter && w.dest === OUT);
-  const evs = runnersOut.map((w) => ({ t: 'rout', p: w.p }));
+  const evs = runnersOut.map((w) => ({ t: 'rout', p: w.p, at: w.outAt }));
   evs.push({ t: 'bat', r });
   const batter = rows.find((w) => w.batter);
-  if (batter?.dest === OUT) evs.push({ t: 'rout', p: batter.p });
+  if (batter?.dest === OUT) evs.push({ t: 'rout', p: batter.p, at: batter.outAt });
   // Where everyone stands once the hit is applied without those runners.
   const at = new Map(rows.map((w) => [w.p, w.batter ? r : w.from]));
   if (typeof r === 'number') {
@@ -904,16 +917,18 @@ function panel(ph, bt) {
       const opts = [];
       if (w.floor === w.from) opts.push([w.from, 'Stayed']);
       for (let to = Math.max(w.floor, w.from + 1); to <= 4; to++) opts.push([to, to === 4 ? 'Home' : BASE[to]]);
-      opts.push([OUT, 'Out']);
+      if (outBases(w).length) opts.push([OUT, 'Out']);
       const note = w.batter ? 'Batter' : `Was on ${BASE[w.from]}${w.floor > w.from ? ', had to run' : ''}`;
       return `
-        <div class="move ${w.dest == null ? 'ask' : ''}">
+        <div class="move ${unplaced(w) ? 'ask' : ''}">
           <div class="move-who"><span class="num-badge sm" style="--team:${color}">${w.p + 1}</span>
             <div><b>${esc(playerName(bt, w.p))}</b><small>${note}</small></div></div>
           <div class="opts">${opts.map(([to, l]) => `<button class="opt ${to === OUT ? 'out' : to === 4 ? 'home' : ''} ${w.dest === to ? 'on' : ''}" data-action="dest" data-i="${i}" data-to="${to}" aria-pressed="${w.dest === to}">${l}</button>`).join('')}</div>
+          ${w.dest === OUT && outBases(w).length > 1 ? `
+          <div class="out-at ${w.outAt ? '' : 'ask'}"><span>Out at</span>${outBases(w).map((b) => `<button class="opt out ${w.outAt === b ? 'on' : ''}" data-action="outAt" data-i="${i}" data-b="${b}" aria-pressed="${w.outAt === b}">${b === 4 ? 'Home' : BASE[b]}</button>`).join('')}</div>` : ''}
         </div>`;
     }).join('');
-    const missing = pending.rows.filter((w) => w.dest == null).length;
+    const missing = pending.rows.filter(unplaced).length;
     const problem = missing ? null : playProblem(pending.rows);
     const b = state.teams[bt].next;
     const head = typeof pending.r === 'number'
@@ -951,7 +966,7 @@ function panel(ph, bt) {
 // While placing runners the tabs give way to Back / Confirm, so Confirm is
 // always on screen however many runners there are.
 function confirmBar() {
-  const missing = pending.rows.filter((w) => w.dest == null).length;
+  const missing = pending.rows.filter(unplaced).length;
   const problem = missing ? null : playProblem(pending.rows);
   return `
     <nav class="bottom-bar confirm-bar">
@@ -1038,6 +1053,11 @@ ACTIONS.bat = (el) => {
 ACTIONS.dest = (el) => {
   pending.rows[+el.dataset.i].pick = +el.dataset.to;
   settle();
+  buzz(6);
+  renderScore();
+};
+ACTIONS.outAt = (el) => {
+  pending.rows[+el.dataset.i].outAt = +el.dataset.b;
   buzz(6);
   renderScore();
 };

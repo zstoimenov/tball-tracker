@@ -6,7 +6,8 @@
 //   {t:'bat', r:1|2|3|4}        batter reaches base r (4 = home run)
 //   {t:'bat', r:'K'|'C'|'T'}    batter out: strikeout, caught, thrown/tagged
 //   {t:'adv', p, to}            runner (player index p) advances to base `to`
-//   {t:'rout', p}               runner p put out on the bases
+//   {t:'rout', p, at?}          runner p put out on the bases, at base `at`
+//                               (bases before it count as reached)
 //   {t:'end'}                   end of the half innings
 //   {t:'over'}                  game ended early
 
@@ -134,6 +135,10 @@ function apply(game, s, ev) {
     const from = s.runners.indexOf(ev.p);
     if (from > 0) {
       s.runners[from] = null;
+      // Bases passed safely before the out are dots on the sheet. They are
+      // drawn straight onto the cell; the runner is off the field already.
+      const c = cellOf(s, team, inning, ev.p);
+      for (let b = from; b < Math.min(ev.at || 0, 4) - 1; b++) c.segs.push({ from: b, to: b + 1 });
       recordOut(s, team, inning, ev.p, 'R');
     }
   } else if (ev.t === 'end') {

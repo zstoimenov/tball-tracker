@@ -387,6 +387,9 @@ main.score { padding-top: 12px; }
 .opt.home.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .opt.out { color: var(--out-ink); }
 .opt.out.on { background: var(--out); border-color: var(--out); color: #fff; }
+.out-at { display: flex; align-items: center; gap: 6px; margin-top: 6px; padding: 6px; border-radius: 12px; background: var(--out-bg); }
+.out-at > span { flex: none; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: var(--out-ink); padding: 0 4px; }
+.out-at.ask { outline: 2px solid #f5a524; }
 .confirm-bar { flex-direction: column; gap: 6px; padding-top: 8px; }
 .confirm-bar .play-problem { margin: 0 auto; max-width: 608px; text-align: center; color: var(--out-ink); font-weight: 700; font-size: 14px; }
 .confirm-row { display: flex; gap: 8px; width: 100%; max-width: 608px; margin: 0 auto; }
