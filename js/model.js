@@ -3,7 +3,9 @@
 //
 // Bases: 0 = home plate (batting), 1 = 1st, 2 = 2nd, 3 = 3rd, 4 = scored.
 // Events:
-//   {t:'bat', r:1|2|3|4}        batter reaches base r (4 = home run)
+//   {t:'bat', r:1|2|3|4, p?}    batter reaches base r (4 = home run). `p` names
+//                               the batter when not the next in order
+//                               (batting out of order); order goes on after them.
 //   {t:'bat', r:'K'|'C'|'T'}    batter out: strikeout, caught, thrown/tagged
 //   {t:'adv', p, to}            runner (player index p) advances to base `to`
 //   {t:'rout', p, at?}          runner p put out on the bases, at base `at`
@@ -114,9 +116,9 @@ function apply(game, s, ev) {
   const T = s.teams[team];
 
   if (ev.t === 'bat') {
-    const p = T.next;
+    const p = ev.p ?? T.next;
     T.bats++;
-    T.next = (T.next + 1) % game.teams[team].players.length;
+    T.next = (p + 1) % game.teams[team].players.length;
     s.batters++;
     cellOf(s, team, inning, p);
     if (typeof ev.r === 'number') {

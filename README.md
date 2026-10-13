@@ -14,6 +14,13 @@ through the phone's share sheet.
   is guessed: impossible bases are hidden, Confirm waits until every runner is
   placed, the diamond previews the moves, and Undo takes back the whole play. Later moves (steals, overthrows) by tapping a runner on the diamond.
 - Runs this innings shown live on the scoreboard.
+- Catches mistakes on the spot: impossible plays are blocked with the reason
+  (too many outs, two runners on a base), doubtful ones get an amber check
+  (runs on the play that makes the last out), every saved play is repeated in
+  a banner with Undo, and double taps are ignored.
+- "Not Sam?" picks the real batter when a child bats out of order.
+- Innings over shows who scored and who was out, to check with the umpire.
+- "Play another innings" at the end, so the length needn't be fixed up front.
 - Three tabs: Score, Sheet (the paper sheet, fitted to the phone width) and Share.
 - "Innings over, tell the umpire" prompts at the configured limit.
 

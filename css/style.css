@@ -390,6 +390,17 @@ main.score { padding-top: 12px; }
 .out-at { display: flex; align-items: center; gap: 6px; margin-top: 6px; padding: 6px; border-radius: 12px; background: var(--out-bg); }
 .out-at > span { flex: none; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: var(--out-ink); padding: 0 4px; }
 .out-at.ask { outline: 2px solid #f5a524; }
+.confirm-bar .play-warning { margin: 0 auto; max-width: 608px; text-align: center; color: var(--warn-ink); background: var(--warn-bg); border-radius: 10px; padding: 6px 10px; font-weight: 700; font-size: 14px; }
+.batter-row > div { flex: 1; }
+.batter-row .not-batter { flex: none; margin: 0; font-size: 13px; }
+.inn-sum { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0 0 14px; padding: 10px 12px; border-radius: 12px; background: var(--surface-2); font-size: 14px; }
+.inn-sum dt { font-weight: 800; color: var(--muted); }
+.inn-sum dd { margin: 0; font-weight: 700; }
+.alt-row { display: flex; gap: 8px; margin-top: 8px; }
+.alt-row .btn { min-height: 44px; font-size: 14px; padding: 8px 10px; }
+.alt-row .btn svg { width: 18px; height: 18px; }
+.toast.rec { border: 2px solid var(--accent); }
+.toast.rec button { padding: 10px 18px; font-size: 16px; background: var(--accent); color: var(--accent-ink); }
 .confirm-bar { flex-direction: column; gap: 6px; padding-top: 8px; }
 .confirm-bar .play-problem { margin: 0 auto; max-width: 608px; text-align: center; color: var(--out-ink); font-weight: 700; font-size: 14px; }
 .confirm-row { display: flex; gap: 8px; width: 100%; max-width: 608px; margin: 0 auto; }
@@ -523,7 +534,8 @@ main.score { padding-top: 12px; }
   padding: 12px 14px; border: 0; border-radius: 14px; background: var(--surface-2);
 }
 .menu-item b { display: block; }
-.menu-item small { color: var(--muted); font-size: 13px; }
+.menu-item small { display: block; color: var(--muted); font-size: 13px; }
+.menu-item.on { outline: 2.5px solid var(--safe); }
 .menu-item.danger { color: var(--out-ink); }
 
 .help h4 { margin: 18px 0 6px; font-size: 16px; }

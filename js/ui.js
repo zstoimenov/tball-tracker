@@ -75,7 +75,7 @@ export const confirmSheet = (title, text, ok, kind = 'primary') =>
   }).then(Boolean);
 
 let toastTimer;
-export function toast(msg, action) {
+export function toast(msg, action, kind = '') {
   let t = document.getElementById('toast');
   if (!t) {
     t = document.createElement('div');
@@ -86,6 +86,7 @@ export function toast(msg, action) {
   }
   t.innerHTML = `<span>${esc(msg)}</span>${action ? `<button>${esc(action.label)}</button>` : ''}`;
   if (action) t.querySelector('button').onclick = () => { t.classList.remove('show'); action.run(); };
+  t.className = `toast ${kind}`;
   t.classList.add('show');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => t.classList.remove('show'), action ? 4000 : 2400);
