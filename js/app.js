@@ -664,14 +664,30 @@ function startPlay(r) {
   for (let b = 3; b >= 1; b--) {
     const p = state.runners[b];
     if (p == null) continue;
-    const min = forced.get(p);
-    rows.push({ p, from: b, min: min ?? b, forced: min != null, dest: min ?? null });
+    // min: where the batter's hit leaves this runner before any extra moves.
+    rows.push({ p, from: b, min: forced.get(p) ?? b, pick: null });
   }
   if (typeof r === 'number') {
     const bt = battingTeam(state);
-    rows.push({ p: state.teams[bt].next, from: 0, min: r, forced: true, dest: r, batter: true });
+    rows.push({ p: state.teams[bt].next, from: 0, min: r, pick: r, batter: true });
   }
   pending = { r, rows };
+  settle();
+}
+
+// Works out each row's lowest possible base (floor) and final base (dest)
+// from the trailing runner forward: a runner must end ahead of everyone
+// behind them, so a pick that has become impossible is lifted to the floor
+// and returns if the runner behind is moved back.
+function settle() {
+  let behind = 0; // lowest base still free for the next runner ahead
+  for (const w of [...pending.rows].reverse()) {
+    w.floor = Math.max(w.min, Math.min(behind, 4));
+    if (w.pick === OUT) w.dest = OUT;
+    else if (w.pick != null) w.dest = Math.max(w.pick, w.floor);
+    else w.dest = w.floor > w.from ? w.floor : null;
+    if (w.dest != null && w.dest !== OUT) behind = Math.max(behind, w.dest + 1);
+  }
 }
 
 // Rows are lead runner first. Returns a message when the placement can't
@@ -875,10 +891,10 @@ function panel(ph, bt) {
     const color = game.teams[bt].color || COLORS[bt];
     const rows = pending.rows.map((w, i) => {
       const opts = [];
-      if (!w.forced) opts.push([w.from, 'Stayed']);
-      for (let to = Math.max(w.min, w.from + 1); to <= 4; to++) opts.push([to, to === 4 ? 'Home' : BASE[to]]);
+      if (w.floor === w.from) opts.push([w.from, 'Stayed']);
+      for (let to = Math.max(w.floor, w.from + 1); to <= 4; to++) opts.push([to, to === 4 ? 'Home' : BASE[to]]);
       opts.push([OUT, 'Out']);
-      const note = w.batter ? 'Batter' : `Was on ${BASE[w.from]}${w.forced ? ', had to run' : ''}`;
+      const note = w.batter ? 'Batter' : `Was on ${BASE[w.from]}${w.floor > w.from ? ', had to run' : ''}`;
       return `
         <div class="move ${w.dest == null ? 'ask' : ''}">
           <div class="move-who"><span class="num-badge sm" style="--team:${color}">${w.p + 1}</span>
@@ -1009,7 +1025,8 @@ ACTIONS.bat = (el) => {
   renderScore();
 };
 ACTIONS.dest = (el) => {
-  pending.rows[+el.dataset.i].dest = +el.dataset.to;
+  pending.rows[+el.dataset.i].pick = +el.dataset.to;
+  settle();
   buzz(6);
   renderScore();
 };
