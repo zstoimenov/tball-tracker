@@ -526,6 +526,20 @@ main.score { padding-top: 12px; }
 .help h4 { margin: 18px 0 6px; font-size: 16px; }
 .help ul { margin: 0; padding-left: 20px; }
 .help li { margin-bottom: 6px; }
+.guide { background: var(--surface-2); border-radius: 16px; padding: 4px 14px 10px; }
+.guide h4 { margin-top: 12px; }
+.help h5 { margin: 12px 0 4px; font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.guide-key { display: flex; gap: 8px; align-items: flex-start; margin: 0 0 4px; padding: 10px 12px; border-radius: 12px; background: var(--warn-bg); color: var(--warn-ink); font-weight: 700; }
+.guide-key svg { flex: none; width: 20px; height: 20px; }
+.guide-link {
+  display: flex; align-items: center; gap: 12px; width: 100%; margin-top: 10px; padding: 12px 14px; text-align: left;
+  border: 0; border-radius: 16px; background: var(--surface); color: var(--ink); box-shadow: var(--shadow);
+}
+.guide-link > svg:first-child { flex: none; width: 22px; height: 22px; color: var(--warn-ink); }
+.guide-link > svg:last-child { flex: none; color: var(--muted); }
+.guide-link span { flex: 1; min-width: 0; }
+.guide-link b { display: block; font-size: 16px; }
+.guide-link small { display: block; color: var(--muted); font-size: 13px; }
 .legend { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 8px 0; }
 .legend > div { display: flex; align-items: center; gap: 10px; background: var(--surface-2); border-radius: 12px; padding: 8px; font-size: 13px; }
 .legend canvas { width: 56px; height: 56px; flex: none; border-radius: 4px; }

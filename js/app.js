@@ -146,6 +146,7 @@ function renderHome() {
         <span><b>New game</b><small>Set up teams in under a minute</small></span>
         ${ICON.chevron}
       </button>
+      <button class="guide-link" data-action="help">${ICON.bulb}<span><b>Game day guide</b><small>How to score a play, step by step</small></span>${ICON.chevron}</button>
       ${live.length ? `<h2 class="section">In progress</h2>${live.map(gameCard).join('')}` : ''}
       ${done.length ? `<h2 class="section">Finished</h2>${done.map(gameCard).join('')}` : ''}
       ${games.length ? '' : `<div class="empty">${ART.diamond}<p>No games yet. Tap <b>New game</b> to start scoring.</p></div>`}
@@ -642,7 +643,7 @@ function coachTip(ph, bt) {
   const name = esc(playerName(bt, state.teams[bt].next));
   const text = {
     bat: game.events.length === 0
-      ? 'Tap where the batter got to, or how they got out. You place the other runners next.'
+      ? '<b>Watch the whole play</b>, then tap where the batter got to. Full guide: <b>⋯ &gt; Help</b>.'
       : `Tap where <b>${name}</b> got to, or how they got out.`,
     confirm: 'Tap where each runner ended up, then Confirm. <b>Home</b> means they scored.',
     inningsOver: 'Tell the umpire, then swap: the other team bats now.',
@@ -1040,7 +1041,7 @@ ACTIONS.menu = async () => {
   const v = await sheet({
     title: 'Game options',
     body: '<div class="menu-list">' +
-      `<button class="menu-item" data-i="4">${ICON.help}<span><b>Help</b><small>Rules, symbols and tips</small></span></button>` +
+      `<button class="menu-item" data-i="4">${ICON.help}<span><b>Help</b><small>Game day guide, rules and symbols</small></span></button>` +
       `<button class="menu-item" data-i="0">${ICON.edit}<span><b>Edit game</b><small>Names, players, innings, rules</small></span></button>` +
       (state.over ? '' : `<button class="menu-item" data-i="1">${ICON.flag}<span><b>End innings now</b><small>Before the limit is reached</small></span></button>`) +
       (state.over ? '' : `<button class="menu-item" data-i="2">${ICON.whistle}<span><b>End game now</b><small>E.g. time ran out</small></span></button>`) +
@@ -1079,6 +1080,33 @@ ACTIONS.help = () =>
     title: 'How it works',
     body: `
       <div class="help">
+        <div class="guide">
+          <h4>Game day guide</h4>
+          <p class="guide-key">${ICON.bulb}<span>Watch the whole play. Tap only when the ball is dead and everyone has stopped running.</span></p>
+          <h5>Before the game</h5>
+          <ul>
+            <li>Set up the game at home: teams in batting order and the innings rule.</li>
+            <li>Install the app so it works with no signal.</li>
+          </ul>
+          <h5>Each batter</h5>
+          <ul>
+            <li>Tap where the batter ended up, or how they got out.</li>
+            <li>If anyone was on base, a list appears. Rows with an orange border need a tap: <b>Stayed</b>, a base, <b>Home</b> (scored) or <b>Out</b>.</li>
+            <li>Check the diamond preview, then <b>Confirm</b>. Runs this innings should match what you saw.</li>
+            <li>Stand where you can see every base. A helper calling out plays makes it easy.</li>
+          </ul>
+          <h5>Fixing mistakes</h5>
+          <ul>
+            <li>Before Confirm: <b>Back</b>. After: <b>Undo</b> takes back the whole play.</li>
+            <li>A runner moved later (steal, overthrow)? Tap them on the diamond.</li>
+            <li>Missed a play? Enter it straight away and check the <b>Sheet</b> tab between innings.</li>
+          </ul>
+          <h5>End of innings and game</h5>
+          <ul>
+            <li>At "Innings over", tell the umpire and swap teams.</li>
+            <li>At the end, the umpire signs on the phone, then <b>Share</b> the sheet.</li>
+          </ul>
+        </div>
         <h4>Tee-ball in 30 seconds</h4>
         <ul>
           <li>Teams take turns to bat. Each turn is half an <b>innings</b>.</li>
@@ -1089,9 +1117,9 @@ ACTIONS.help = () =>
         </ul>
         <h4>Scoring in this app</h4>
         <ul>
-          <li>Tap what the batter did. Runners who <em>have</em> to move (because the batter needs their base) move automatically.</li>
-          <li>If a runner goes further or gets out, tap them on the diamond.</li>
-          <li>Every tap can be undone.</li>
+          <li>Tap what the batter did, then place everyone on base and Confirm.</li>
+          <li>Runners who <em>have</em> to move (because the batter needs their base) are pre-set. You choose for the rest.</li>
+          <li>Every play can be undone.</li>
         </ul>
         <h4>Symbols on the sheet</h4>
         <div class="legend">${LEGEND.map((l, i) => `<div><canvas data-legend="${i}" width="112" height="112"></canvas><span>${l.text}</span></div>`).join('')}</div>
