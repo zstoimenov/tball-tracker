@@ -302,7 +302,7 @@ ACTIONS.new = () => {
     locked: [0, 0],
     full: [false, false],
     // A carried-over name is a default, so the fixture may replace it.
-    auto: { mine: mine?.name || '', opp: '', venue: '' },
+    auto: { mine: mine?.name || '', opp: '', venue: '', players: JSON.stringify(mine?.players || []) },
   };
   draft.preset = presetOf(draft);
   applyFixture();
@@ -348,6 +348,20 @@ function fixtureCard() {
         </select></label>
       ${line}
     </div>`;
+}
+
+// Picking a team brings in its players from the latest game it played,
+// unless the carried-over list has already been edited.
+function carryTeam() {
+  const d = draft;
+  const own = teamName(myTeam);
+  const src = own && [...games].sort((a, b) => b.created - a.created).flatMap((g) => g.teams).find((t) => t.name === own);
+  const at = d.teams.findIndex((t) => t.name && t.name === d.auto.mine);
+  const t = d.teams[at < 0 ? 0 : at];
+  if (!src || JSON.stringify(t.players) !== d.auto.players) return;
+  t.players = [...src.players];
+  if (src.color) t.color = src.color;
+  d.auto.players = JSON.stringify(t.players);
 }
 
 ACTIONS.fixtureDate = (el) => { draft.date = el.dataset.d; applyFixture(); renderSetup(); };
@@ -507,6 +521,7 @@ function bindSetupInputs() {
   app.querySelector('[data-bind="date"]')?.addEventListener('change', refill);
   app.querySelector('#my-team')?.addEventListener('change', (e) => {
     myTeam = e.target.value;
+    if (!draft.editing) carryTeam();
     store.set('tball.myTeam', myTeam);
     refill();
   });
