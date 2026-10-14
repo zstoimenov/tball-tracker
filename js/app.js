@@ -280,6 +280,10 @@ const STEPS = ['Teams', 'Players', 'Rules'];
 
 ACTIONS.new = () => {
   const last = [...games].sort((a, b) => b.created - a.created)[0];
+  // Carry over the user's own team from the last game: the one matching the
+  // picked fixture team, else the one that batted first.
+  const own = teamName(myTeam);
+  const mine = last?.teams.find((t) => own && t.name === own) || last?.teams[0];
   draft = {
     editing: false,
     step: 0,
@@ -292,12 +296,13 @@ ACTIONS.new = () => {
     strikeouts: last?.strikeouts ?? true,
     // Start from last game's own team to save typing each week.
     teams: [
-      { name: last?.teams[0].name || '', color: last?.teams[0].color || COLORS[0], players: last ? [...last.teams[0].players] : [] },
+      { name: mine?.name || '', color: mine?.color || COLORS[0], players: mine ? [...mine.players] : [] },
       { name: '', color: COLORS[1], players: [] },
     ],
     locked: [0, 0],
     full: [false, false],
-    auto: { mine: '', opp: '', venue: '' },
+    // A carried-over name is a default, so the fixture may replace it.
+    auto: { mine: mine?.name || '', opp: '', venue: '' },
   };
   draft.preset = presetOf(draft);
   applyFixture();
