@@ -5,6 +5,7 @@ import {
 import { renderGrid, renderSheet, drawCell } from './draw.js';
 import { ICON, esc, sheet, confirmSheet, toast, buzz, viewer } from './ui.js';
 import * as db from './storage.js';
+import { teamOptions, teamName, fixtureOn, nextFixture } from './fixtures.js';
 
 const app = document.getElementById('app');
 const BASE = ['Home', '1st', '2nd', '3rd', 'Home'];
@@ -296,10 +297,55 @@ ACTIONS.new = () => {
     ],
     locked: [0, 0],
     full: [false, false],
+    auto: { mine: '', opp: '', venue: '' },
   };
   draft.preset = presetOf(draft);
+  applyFixture();
   go('setup');
 };
+
+// ---------- fixture ----------
+// The user's team is picked in the app and kept on this phone only.
+let myTeam = store.get('tball.myTeam', '');
+
+// Fill names and venue from the fixture, leaving anything the user typed.
+function applyFixture() {
+  const d = draft;
+  const fx = fixtureOn(myTeam, d.date);
+  const own = teamName(myTeam);
+  const mineAt = d.teams.findIndex((t) => t.name && t.name === (d.auto.mine || own));
+  const mine = mineAt < 0 ? 0 : mineAt;
+  const opp = 1 - mine;
+  const free = (v, last) => !v.trim() || v === last;
+  if (own && free(d.teams[mine].name, d.auto.mine)) { d.teams[mine].name = own; d.auto.mine = own; }
+  const g = fx?.type === 'game' ? fx : null;
+  if (free(d.teams[opp].name, d.auto.opp)) { d.teams[opp].name = g ? g.opponent : ''; d.auto.opp = d.teams[opp].name; }
+  if (free(d.venue, d.auto.venue)) { d.venue = g ? g.venue : ''; d.auto.venue = d.venue; }
+}
+
+function fixtureCard() {
+  const fx = fixtureOn(myTeam, draft.date);
+  let line = '';
+  if (fx?.type === 'game') line = `<p class="fx-line"><b>v ${esc(fx.opponent)}</b> (${fx.home ? 'home' : 'away'}) · ${esc(fx.venue)}</p>`;
+  else if (fx?.type === 'bye') line = '<p class="fx-line">Bye this round.</p>';
+  else if (fx) line = `<p class="fx-line">${esc(fx.text)}.</p>`;
+  if (myTeam && fx?.type !== 'game') {
+    const nx = nextFixture(myTeam, draft.date);
+    line += nx ? `<button class="fx-next" data-action="fixtureDate" data-d="${nx.date}">Next game: <b>${esc(fmtDate(nx.date))}</b> v ${esc(nx.opponent)} · ${esc(nx.ground)}</button>`
+      : (fx ? '' : '<p class="fx-line">No more games in the fixture.</p>');
+  }
+  return `
+    <div class="card">
+      <label class="field"><span>My team <em>from the fixture, saved on this phone only</em></span>
+        <select class="input" id="my-team">
+          <option value="">Not set</option>
+          ${teamOptions().map((g) => `<optgroup label="${esc(g.label)}">${g.teams.map((t) => `<option value="${t.key}" ${t.key === myTeam ? 'selected' : ''}>${esc(t.label)}</option>`).join('')}</optgroup>`).join('')}
+        </select></label>
+      ${line}
+    </div>`;
+}
+
+ACTIONS.fixtureDate = (el) => { draft.date = el.dataset.d; applyFixture(); renderSetup(); };
 
 // Batting positions up to the furthest one that has batted (players can
 // bat out of order, so this can be more than the number of at-bats).
@@ -369,6 +415,7 @@ function teamFields(i) {
 function setupTeams() {
   return `
     <p class="lead">Who's playing? The team that bats first goes on top.</p>
+    ${draft.editing ? '' : fixtureCard()}
     ${teamFields(0)}
     <button class="swap-btn" data-action="swapTeams">${ICON.swap} Swap batting order</button>
     ${teamFields(1)}
@@ -450,6 +497,14 @@ function bindSetupInputs() {
     }),
   );
   bindPlayerDrag();
+  // A new date or team refills the opponent and venue from the fixture.
+  const refill = () => { if (!draft.editing) { applyFixture(); renderSetup(); } };
+  app.querySelector('[data-bind="date"]')?.addEventListener('change', refill);
+  app.querySelector('#my-team')?.addEventListener('change', (e) => {
+    myTeam = e.target.value;
+    store.set('tball.myTeam', myTeam);
+    refill();
+  });
   const np = document.getElementById('new-player');
   np?.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); ACTIONS.addPlayer(); } });
 }

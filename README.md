@@ -9,6 +9,10 @@ through the phone's share sheet.
   and a key to every symbol on the sheet, plus coach tips while scoring.
 - 3-step setup: teams (with colours), players (names optional, unnamed players
   are shown by number), rules (innings count and when an innings ends).
+- District fixture built in (U10s 2026/27, `js/fixtures.js`): pick your team on
+  New game and the opponent and venue (ground, diamond, start time) fill in
+  for the date. Your team is saved on your phone only, never in the app's
+  code. Everything filled in can still be changed by hand on the day.
 - Guided scoring: tap what the batter did, then a list shows everyone on base.
   Tap where each one ended up (Stayed, a base, Home or Out) and Confirm. Nothing
   is guessed: impossible bases are hidden, Confirm waits until every runner is

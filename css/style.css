@@ -329,8 +329,8 @@ main.score { padding-top: 12px; }
 
 /* ---------- field / diamond ---------- */
 .field-card { background: linear-gradient(180deg, #1c5e3d, #164a31); border-radius: 22px; padding: 6px 8px; margin-bottom: 12px; box-shadow: var(--shadow); }
-.field { position: relative; aspect-ratio: 300 / 250; max-width: calc(23vh * 1.2); margin: 0 auto; }
-.field svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+div.field { position: relative; aspect-ratio: 300 / 250; max-width: calc(23vh * 1.2); margin: 0 auto; }
+div.field svg { position: absolute; inset: 0; width: 100%; height: 100%; }
 .grass { fill: #247a4d; }
 .dirt { fill: #c48450; }
 .lines { fill: none; stroke: rgba(255, 255, 255, .85); stroke-width: 2.5; }
@@ -619,7 +619,7 @@ main.score { padding-top: 12px; }
   .sb-strip b { font-size: 14px; }
   main.score { padding-top: 8px; }
   .field-card { padding: 4px 6px; border-radius: 18px; margin-bottom: 8px; }
-  .field { max-width: calc(21vh * 1.2); }
+  div.field { max-width: calc(21vh * 1.2); }
   /* Number-only runner chips so they never cover the bases. */
   .chip, .chip.num-only { padding: 2px; }
   .chip em { display: none; }
@@ -654,7 +654,7 @@ main.score { padding-top: 12px; }
   .plays.hits .play b { font-size: 13px; }
   .play small { display: none; }
   .play { min-height: 44px; }
-  .field { max-width: calc(16vh * 1.2); }
+  div.field { max-width: calc(16vh * 1.2); }
 }
 
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
@@ -679,3 +679,8 @@ main.score { padding-top: 12px; }
 .zoomable { position: relative; display: block; width: 100%; padding: 0; border: 0; background: none; cursor: zoom-in; }
 .zoom-hint { display: flex; align-items: center; justify-content: center; gap: 6px; margin: 8px 0 0; color: var(--muted); font-size: 13px; font-weight: 600; }
 .zoom-hint svg { width: 16px; height: 16px; }
+
+/* Fixture card on New game */
+select.input, select.input:focus { appearance: none; -webkit-appearance: none; background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%); background-position: calc(100% - 20px) 50%, calc(100% - 14px) 50%; background-size: 6px 6px; background-repeat: no-repeat; padding-right: 36px; }
+.fx-line { margin: 10px 2px 0; font-size: 14px; }
+.fx-next { display: block; width: 100%; margin-top: 10px; padding: 10px 12px; border: 1px dashed var(--line); border-radius: 12px; background: none; color: inherit; font: inherit; font-size: 14px; text-align: left; }
