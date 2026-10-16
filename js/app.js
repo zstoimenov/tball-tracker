@@ -1768,7 +1768,7 @@ ACTIONS.extraInnings = () => {
 function nextAfterChange(team, order) {
   const T = state.teams[team];
   // Before the team has batted the first in the order leads off; after that
-  // whoever is up stays up (change it with At the plate) unless they left.
+  // whoever is up stays up (change it with Bat now) unless they left.
   if (!T.bats) return order[0];
   const cur = team === battingTeam(state) ? batterUp(team) : T.next;
   if (order.includes(cur)) return cur;
@@ -1780,7 +1780,7 @@ function nextAfterChange(team, order) {
   return order[0];
 }
 
-// Batting out of order is picked here too ("At the plate"): only players
+// Batting out of order is picked here too (Bat now on a row): only players
 // who haven't batted this innings and aren't on base, since each gets one
 // box per innings on the sheet. The order carries on after them.
 ACTIONS.lineup = async () => {
@@ -1795,6 +1795,7 @@ ACTIONS.lineup = async () => {
   const inning = bt == null ? 0 : currentInning(state);
   const canBat = (p) => !state.teams[bt].cells[inning + ':' + p] && !state.runners.includes(p);
   let atBat = bt == null ? null : batterUp(bt);
+  let help = false; // explanation behind the i button
   let el = null;
   const draw = () => {
     const d = drafts[team];
@@ -1805,22 +1806,29 @@ ACTIONS.lineup = async () => {
     const next = batting ? atBat : d.order.length ? nextAfterChange(team, d.order) : null;
     // Squad players not in this game yet, for a one-tap late arrival.
     picks = isOwn(game.teams[team].name) ? (squadOf() || []).filter((n) => !d.names.some((x) => x.trim() === n)) : [];
-    const plate = batting && free.length ? `
-      <label class="field lu-plate"><span>At the plate <em>pick who is really batting; the order carries on after them</em></span>
-        <select class="input" id="lu-atbat">${free.map((p) => `<option value="${p}" ${p === atBat ? 'selected' : ''}>${p + 1}. ${esc(d.names[p] || `Batter #${p + 1}`)}</option>`).join('')}</select></label>` : '';
+    // Batting team: the batter up wears "Up to bat"; anyone else who can
+    // bat now has a Bat now button; the rest say why they can't.
+    const batCell = (p) => {
+      if (!batting) return p === next ? '<em>Next</em>' : '';
+      if (p === atBat) return `<button class="lu-bat on" data-lu="bat" data-p="${p}" aria-pressed="true">${ICON.ball}Up to bat</button>`;
+      if (free.includes(p)) return `<button class="lu-bat" data-lu="bat" data-p="${p}" aria-pressed="false">Bat now</button>`;
+      return `<span class="lu-note">${state.runners.includes(p) ? 'On base' : 'Batted'}</span>`;
+    };
     const gone = d.names.map((_, p) => p).filter((p) => !d.order.includes(p));
     const row = (p, k) => `
       <li class="lu-row ${p === next ? 'next' : ''}">
         <span class="num-badge sm" style="--team:${color}">${p + 1}</span>
         <button class="btn small out" data-lu="left" data-k="${k}">Left</button>
         <input class="input bare" data-lu-name="${p}" value="${esc(d.names[p])}" placeholder="#${p + 1}" maxlength="24" enterkeyhint="${k < d.order.length - 1 ? 'next' : 'done'}" aria-label="Player ${p + 1} name">
-        ${p === next ? `<em>${batting ? 'At bat' : 'Next'}</em>` : ''}
+        ${batCell(p)}
         <span class="grip" data-grip="${k}" role="button" tabindex="0" aria-label="Drag, or use arrow keys, to move ${esc(d.names[p] || `player ${p + 1}`)}">${ICON.grip}</span>
       </li>`;
     el.querySelector('.bsheet-body').innerHTML = `
-      <div class="segmented">${game.teams.map((t, i) => `<button class="${i === team ? 'on' : ''}" data-lu="team" data-t="${i}" style="--team:${safeColor(t.color, COLORS[i])}"><i></i><span class="seg-name">${esc(t.name)}</span></button>`).join('')}</div>
-      ${plate}
-      <p class="muted">Order changes apply from the next batter. Plays already recorded keep their players.</p>
+      <div class="lu-top">
+        <div class="segmented thin">${game.teams.map((t, i) => `<button class="${i === team ? 'on' : ''}" data-lu="team" data-t="${i}" style="--team:${safeColor(t.color, COLORS[i])}"><i></i><span class="seg-name">${esc(t.name)}</span></button>`).join('')}</div>
+        <button class="icon-btn sm lu-info ${help ? 'on' : ''}" data-lu="info" aria-expanded="${help}" aria-label="How Lineup works">${ICON.info}</button>
+      </div>
+      <p class="muted lu-help" ${help ? '' : 'hidden'}>${batting ? 'Wrong child at the plate? Tap <b>Bat now</b> on who is really batting. ' : ''}Drag ${ICON.grip} to change the order; it applies from the next batter.</p>
       <ol class="lu-list" id="lu-order">${d.order.map(row).join('')}</ol>
       <div class="add-row"><input class="input" id="lu-new" placeholder="Late arrival: name (optional)" maxlength="24" enterkeyhint="done" autocomplete="off">
         <button class="btn primary" data-lu="add">${ICON.plus}<span class="sr">Add</span></button></div>
@@ -1840,9 +1848,15 @@ ACTIONS.lineup = async () => {
     onOpen(sh) {
       el = sh;
       draw();
-      sh.addEventListener('change', (e) => {
-        if (e.target.id === 'lu-atbat') { atBat = +e.target.value; draw(); }
-      });
+      // Open on the batter who is up (or next), centred above the buttons.
+      const row = sh.querySelector('#lu-order .lu-row.next');
+      if (row) {
+        const r = row.getBoundingClientRect();
+        const box = sh.getBoundingClientRect();
+        const acts = sh.querySelector('.bsheet-acts')?.offsetHeight || 0;
+        sh.scrollTop += r.top - (box.top + (box.height - acts) / 2 - r.height / 2);
+        row.querySelector('.lu-bat')?.focus({ preventScroll: true }); // not the name field: no keyboard pop-up
+      }
       sh.addEventListener('input', (e) => {
         const k = e.target.dataset.luName;
         if (k != null) drafts[team].names[+k] = e.target.value;
@@ -1855,6 +1869,8 @@ ACTIONS.lineup = async () => {
         const k = +b.dataset.k;
         const a = b.dataset.lu;
         if (a === 'team') team = +b.dataset.t;
+        if (a === 'bat') atBat = +b.dataset.p;
+        if (a === 'info') help = !help;
         if (a === 'left') {
           if (d.order.length === 1) return toast('Keep at least one player in the lineup');
           d.order.splice(k, 1);
@@ -2112,7 +2128,7 @@ ACTIONS.help = () =>
             <li>Tap where the batter ended up, or how they got out.</li>
             <li>If anyone was on base, a list appears. Forced advances are pre-selected; tap any runner to adjust (<b>Stayed</b>, a base, <b>Home</b> or <b>Out</b>) and <b>Confirm</b>.</li>
             <li>Tapped <b>Out</b>? Also tap the base they were out at.</li>
-            <li>Wrong child at the plate? Tap <b>Lineup</b> and pick who is <b>At the plate</b>.</li>
+            <li>Wrong child at the plate? Tap <b>Lineup</b>, then <b>Bat now</b> on who is really batting.</li>
             <li>Check the diamond preview, then <b>Confirm</b>. A banner repeats what was saved, with <b>Undo</b>.</li>
             <li>Late arrival, someone left, or the order was wrong? Tap <b>Lineup</b> next to the batter. Changes apply from the next batter and never alter plays already saved.</li>
             <li>Stand where you can see every base. A helper calling out plays makes it easy.</li>
