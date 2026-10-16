@@ -740,6 +740,7 @@ function setupPlayers() {
   // of deleting them.
   const squad = !draft.editing && isOwn(t.name) ? squadOf() : null;
   const out = t.out || [];
+  const inSquad = (p) => !!squad && !!p.trim() && squad.includes(p.trim());
   return `
     <p class="lead">${squad
       ? 'Your squad, in squad order. Tap <b>Not here</b> for anyone missing today, then drag to set today\'s batting order.'
@@ -757,10 +758,9 @@ function setupPlayers() {
       ${t.players.map((p, k) => `
         <li data-k="${k}" class="${k < locked ? 'locked' : ''}">
           <span class="num">${k + 1}</span>
+          ${inSquad(p) ? `<button class="btn small out not-here" data-action="notHere" data-k="${k}">Not here</button>` : ''}
           <input class="input bare" data-bind="player:${i}:${k}" value="${esc(p)}" placeholder="#${k + 1}" aria-label="Player ${k + 1} name" enterkeyhint="${k < t.players.length - 1 ? 'next' : 'done'}" maxlength="24">
-          ${squad && p.trim() && squad.includes(p.trim())
-            ? `<button class="btn small ghost not-here" data-action="notHere" data-k="${k}">Not here</button>`
-            : `<button class="icon-btn sm" data-action="removePlayer" data-k="${k}" ${k < locked ? 'disabled' : ''} aria-label="Remove">${ICON.x}</button>`}
+          ${inSquad(p) ? '' : `<button class="icon-btn sm" data-action="removePlayer" data-k="${k}" ${k < locked ? 'disabled' : ''} aria-label="Remove">${ICON.x}</button>`}
           ${k < locked ? `<span class="grip off" aria-hidden="true">${ICON.lock}</span>`
             : `<span class="grip" data-grip="${k}" role="button" tabindex="0" aria-label="Drag, or use arrow keys, to move ${esc(p || `player ${k + 1}`)}">${ICON.grip}</span>`}
         </li>`).join('')}
