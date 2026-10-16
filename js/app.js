@@ -762,7 +762,7 @@ function setupPlayers() {
             ? `<button class="btn small ghost not-here" data-action="notHere" data-k="${k}">Not here</button>`
             : `<button class="icon-btn sm" data-action="removePlayer" data-k="${k}" ${k < locked ? 'disabled' : ''} aria-label="Remove">${ICON.x}</button>`}
           ${k < locked ? `<span class="grip off" aria-hidden="true">${ICON.lock}</span>`
-            : `<span class="grip" data-grip="${k}" role="button" aria-label="Drag to reorder ${esc(p || `player ${k + 1}`)}">${ICON.grip}</span>`}
+            : `<span class="grip" data-grip="${k}" role="button" tabindex="0" aria-label="Drag, or use arrow keys, to move ${esc(p || `player ${k + 1}`)}">${ICON.grip}</span>`}
         </li>`).join('')}
     </ol>
     ${out.length ? `<h4 class="lu-h">Not here today</h4><ul class="lu-list">${out.map((n, k) => `
@@ -893,6 +893,36 @@ ACTIONS.quickFill = () => {
 function bindPlayerDrag() {
   const list = document.getElementById('players');
   if (!list) return;
+  makeSortable(list, draft.locked[draft.tab], (from, to) => {
+    const ps = draft.teams[draft.tab].players;
+    ps.splice(to, 0, ps.splice(from, 1)[0]);
+    renderSetup();
+  });
+}
+
+// Drag and drop reordering for a list whose rows have a [data-grip=index]
+// handle (pointer events, so it works with touch). Rows below the dragged
+// one slide to show where it will land. Rows before `min` stay put. The
+// grip is focusable and Arrow up/down move the row too. onMove(from, to)
+// saves the change and redraws the list.
+function makeSortable(list, min, onMove) {
+  // Inside a bottom sheet the sheet scrolls, elsewhere the page does.
+  const box = list.closest('.bsheet');
+  const scrollTop = () => (box ? box.scrollTop : window.scrollY);
+  const scrollBy = (v) => (box ? box.scrollBy(0, v) : window.scrollBy(0, v));
+  const refocus = (to) => document.querySelector(`#${list.id} [data-grip="${to}"]`)?.focus();
+
+  list.addEventListener('keydown', (e) => {
+    const grip = e.target.closest('[data-grip]');
+    if (!grip || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
+    e.preventDefault();
+    const from = +grip.dataset.grip;
+    const to = from + (e.key === 'ArrowUp' ? -1 : 1);
+    if (to < min || to >= list.children.length) return;
+    onMove(from, to);
+    refocus(to);
+  });
+
   list.addEventListener('pointerdown', (e) => {
     const grip = e.target.closest('[data-grip]');
     if (!grip) return;
@@ -901,9 +931,8 @@ function bindPlayerDrag() {
     const rows = [...list.children];
     const from = +grip.dataset.grip;
     const row = rows[from];
-    const min = draft.locked[draft.tab];
     const pitch = rows.length > 1 ? rows[1].getBoundingClientRect().top - rows[0].getBoundingClientRect().top : row.offsetHeight;
-    const startY = e.pageY;
+    const startY = e.clientY + scrollTop();
     let to = from;
     let lastY = e.clientY;
     let raf = 0;
@@ -913,7 +942,7 @@ function bindPlayerDrag() {
     buzz(8);
 
     const update = () => {
-      const dy = lastY + window.scrollY - startY;
+      const dy = lastY + scrollTop() - startY;
       row.style.transform = `translateY(${dy}px)`;
       to = Math.max(min, Math.min(rows.length - 1, from + Math.round(dy / pitch)));
       rows.forEach((r, k) => {
@@ -924,12 +953,16 @@ function bindPlayerDrag() {
         r.style.transform = shift ? `translateY(${shift}px)` : '';
       });
     };
-    // Scroll the page while dragging near the top or bottom edge.
+    // Scroll while dragging near the top or bottom edge, once the row has
+    // actually moved (so grabbing a row near an edge doesn't scroll).
+    let moved = false;
     const edgeScroll = () => {
-      const edge = 90;
-      const bottom = window.innerHeight - 110;
-      const v = lastY < edge ? -(edge - lastY) / 6 : lastY > bottom ? (lastY - bottom) / 6 : 0;
-      if (v) { window.scrollBy(0, v); update(); }
+      const r = box ? box.getBoundingClientRect() : { top: 0, bottom: window.innerHeight };
+      const top = r.top + (box ? 60 : 90);
+      const bottom = r.bottom - (box ? 60 : 110);
+      moved ||= Math.abs(lastY - e.clientY) > 12;
+      const v = !moved ? 0 : lastY < top ? -(top - lastY) / 6 : lastY > bottom ? (lastY - bottom) / 6 : 0;
+      if (v) { scrollBy(v); update(); }
       raf = requestAnimationFrame(edgeScroll);
     };
     raf = requestAnimationFrame(edgeScroll);
@@ -940,12 +973,11 @@ function bindPlayerDrag() {
       grip.removeEventListener('pointermove', move);
       grip.removeEventListener('pointerup', done);
       grip.removeEventListener('pointercancel', done);
-      if (to !== from) {
-        const ps = draft.teams[draft.tab].players;
-        ps.splice(to, 0, ps.splice(from, 1)[0]);
-        buzz(10);
-      }
-      renderSetup();
+      if (to !== from) buzz(10);
+      rows.forEach((r) => { r.style.transform = ''; });
+      row.classList.remove('dragging');
+      list.classList.remove('sorting');
+      onMove(from, to);
     };
     grip.addEventListener('pointermove', move);
     grip.addEventListener('pointerup', done);
@@ -1779,25 +1811,28 @@ ACTIONS.lineup = async () => {
     const gone = d.names.map((_, p) => p).filter((p) => !d.order.includes(p));
     const row = (p, k) => `
       <li class="lu-row ${p === next ? 'next' : ''}">
-        <span class="lu-pos">${k + 1}</span>
         <span class="num-badge sm" style="--team:${color}">${p + 1}</span>
+        <button class="btn small out" data-lu="left" data-k="${k}">Left</button>
         <input class="input bare" data-lu-name="${p}" value="${esc(d.names[p])}" placeholder="#${p + 1}" maxlength="24" enterkeyhint="${k < d.order.length - 1 ? 'next' : 'done'}" aria-label="Player ${p + 1} name">
         ${p === next ? `<em>${batting ? 'At bat' : 'Next'}</em>` : ''}
-        <button class="icon-btn sm" data-lu="up" data-k="${k}" ${k ? '' : 'disabled'} aria-label="Bat earlier">${ICON.up}</button>
-        <button class="icon-btn sm" data-lu="down" data-k="${k}" ${k < d.order.length - 1 ? '' : 'disabled'} aria-label="Bat later">${ICON.down}</button>
-        <button class="btn small out" data-lu="left" data-k="${k}">Left</button>
+        <span class="grip" data-grip="${k}" role="button" tabindex="0" aria-label="Drag, or use arrow keys, to move ${esc(d.names[p] || `player ${p + 1}`)}">${ICON.grip}</span>
       </li>`;
     el.querySelector('.bsheet-body').innerHTML = `
       <div class="segmented">${game.teams.map((t, i) => `<button class="${i === team ? 'on' : ''}" data-lu="team" data-t="${i}" style="--team:${safeColor(t.color, COLORS[i])}"><i></i><span class="seg-name">${esc(t.name)}</span></button>`).join('')}</div>
       ${plate}
       <p class="muted">Order changes apply from the next batter. Plays already recorded keep their players.</p>
-      <ol class="lu-list">${d.order.map(row).join('')}</ol>
+      <ol class="lu-list" id="lu-order">${d.order.map(row).join('')}</ol>
       <div class="add-row"><input class="input" id="lu-new" placeholder="Late arrival: name (optional)" maxlength="24" enterkeyhint="done" autocomplete="off">
         <button class="btn primary" data-lu="add">${ICON.plus}<span class="sr">Add</span></button></div>
       ${picks.length ? `<div class="lu-picks"><span>From your squad</span>${picks.map((n, i) => `<button class="btn small ghost" data-lu="pick" data-n="${i}">${ICON.plus}${esc(n)}</button>`).join('')}</div>` : ''}
       ${gone.length ? `<h4 class="lu-h">Left the game</h4><ul class="lu-list">${gone.map((p) => `
         <li class="lu-row gone"><span class="num-badge sm" style="--team:${color}">${p + 1}</span><span class="lu-name">${esc(d.names[p] || `#${p + 1}`)}</span>
           <button class="btn small ghost" data-lu="back" data-p="${p}">Back in</button></li>`).join('')}</ul>` : ''}`;
+    makeSortable(el.querySelector('#lu-order'), 0, (from, to) => {
+      const o = drafts[team].order;
+      o.splice(to, 0, o.splice(from, 1)[0]);
+      draw();
+    });
   };
   const v = await sheet({
     title: 'Lineup',
@@ -1812,6 +1847,7 @@ ACTIONS.lineup = async () => {
         const k = e.target.dataset.luName;
         if (k != null) drafts[team].names[+k] = e.target.value;
       });
+
       sh.addEventListener('click', (e) => {
         const b = e.target.closest('[data-lu]');
         if (!b) return;
@@ -1819,8 +1855,6 @@ ACTIONS.lineup = async () => {
         const k = +b.dataset.k;
         const a = b.dataset.lu;
         if (a === 'team') team = +b.dataset.t;
-        if (a === 'up') [d.order[k - 1], d.order[k]] = [d.order[k], d.order[k - 1]];
-        if (a === 'down') [d.order[k + 1], d.order[k]] = [d.order[k], d.order[k + 1]];
         if (a === 'left') {
           if (d.order.length === 1) return toast('Keep at least one player in the lineup');
           d.order.splice(k, 1);
@@ -1904,12 +1938,11 @@ ACTIONS.presetTeam = async () => {
           ` : `<p class="muted" style="margin:6px 0 0">No upcoming fixture games found.</p>`}
         </div>
         <h4 class="lu-h">Squad <em>full list, in your usual batting order. Kept on this phone only.</em></h4>
-        <ol class="lu-list">${squad.map((n, k) => `
-          <li class="lu-row"><span class="lu-pos">${k + 1}</span>
+        <ol class="lu-list" id="sq-list">${squad.map((n, k) => `
+          <li class="lu-row">
             <input class="input bare" data-sq="${k}" value="${esc(n)}" placeholder="Name" maxlength="24" aria-label="Squad player ${k + 1}">
-            <button type="button" class="icon-btn sm" data-sq-act="up" data-k="${k}" ${k ? '' : 'disabled'} aria-label="Earlier">${ICON.up}</button>
-            <button type="button" class="icon-btn sm" data-sq-act="down" data-k="${k}" ${k < squad.length - 1 ? '' : 'disabled'} aria-label="Later">${ICON.down}</button>
-            <button type="button" class="icon-btn sm" data-sq-act="del" data-k="${k}" aria-label="Remove ${esc(n)} from squad">${ICON.x}</button></li>`).join('')}</ol>
+            <button type="button" class="icon-btn sm" data-sq-act="del" data-k="${k}" aria-label="Remove ${esc(n)} from squad">${ICON.x}</button>
+            <span class="grip" data-grip="${k}" role="button" tabindex="0" aria-label="Drag, or use arrow keys, to move ${esc(n)}">${ICON.grip}</span></li>`).join('')}</ol>
         <div class="add-row"><input class="input" id="sq-new" placeholder="Add a player (or paste a list)" maxlength="300" autocomplete="off" enterkeyhint="done">
           <button type="button" class="btn primary" data-sq-act="add">${ICON.plus}<span class="sr">Add</span></button></div>
       ` : ''}`;
@@ -1921,6 +1954,8 @@ ACTIONS.presetTeam = async () => {
       squad = squadFor(pickedKey);
       renderBody();
     });
+    const sqList = shEl.querySelector('#sq-list');
+    if (sqList) makeSortable(sqList, 0, (from, to) => { squad.splice(to, 0, squad.splice(from, 1)[0]); renderBody(); });
     shEl.querySelectorAll('[data-preset-color]').forEach((btn) => {
       btn.addEventListener('click', () => {
         pickedColor = btn.dataset.presetColor;
@@ -1947,8 +1982,6 @@ ACTIONS.presetTeam = async () => {
         if (!b) return;
         const k = +b.dataset.k;
         const a = b.dataset.sqAct;
-        if (a === 'up') [squad[k - 1], squad[k]] = [squad[k], squad[k - 1]];
-        if (a === 'down') [squad[k + 1], squad[k]] = [squad[k], squad[k + 1]];
         if (a === 'del') squad.splice(k, 1);
         if (a === 'add') squad.push(...sh.querySelector('#sq-new').value.split(/[\n,]+/).map((n) => n.trim().slice(0, 24)).filter(Boolean));
         renderBody();
