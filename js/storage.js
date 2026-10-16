@@ -2,10 +2,13 @@
 // (localStorage and IndexedDB) plus a rolling previous copy, so a corrupted
 // write or one store being cleared doesn't lose games. Backups can be
 // exported to a file and restored.
+// exported to a file and restored with schema sanitization.
 
 const KEY = 'tball.games.v1';
 const PREV = 'tball.games.prev';
 const DB = 'tball';
+const HEX_COLOR_RE = /^#[0-9a-fA-F]{3,8}$/;
+const DEFAULT_COLORS = ['#3b82f6', '#e5484d'];
 
 function idb() {
   return new Promise((res, rej) => {
@@ -51,13 +54,66 @@ export function forget(id) {
   try { localStorage.setItem(GONE, JSON.stringify([...s])); } catch { /* ignore */ }
 }
 
+// Sanitize a game record from storage or untrusted backup JSON.
+export function sanitizeGame(g) {
+  if (!g || typeof g.id !== 'string' || !Array.isArray(g.events) || !Array.isArray(g.teams) || g.teams.length !== 2) {
+    return null;
+  }
+  const cleanTeam = (t, idx) => {
+    if (!t || typeof t !== 'object') return null;
+    const players = Array.isArray(t.players)
+      ? t.players.slice(0, 40).map((p) => String(p ?? '').trim().slice(0, 24))
+      : Array(9).fill('');
+    const color = typeof t.color === 'string' && HEX_COLOR_RE.test(t.color.trim())
+      ? t.color.trim()
+      : DEFAULT_COLORS[idx] || '#3b82f6';
+    const start = typeof t.start === 'number' && t.start >= 1 && t.start <= players.length
+      ? Math.floor(t.start)
+      : players.length;
+    return {
+      ...t,
+      name: String(t.name || `Team ${idx + 1}`).trim().slice(0, 30) || `Team ${idx + 1}`,
+      color,
+      players: players.length ? players : Array(9).fill(''),
+      start: players.length ? start : 9,
+    };
+  };
+  const t0 = cleanTeam(g.teams[0], 0);
+  const t1 = cleanTeam(g.teams[1], 1);
+  if (!t0 || !t1) return null;
+
+  // Unknown fields are kept so data from newer versions isn't lost.
+  const { signatureRaw, ...rest } = g; // dropped: older test builds stored a second signature copy
+  const int = (v, def, lo, hi) => {
+    const n = Math.floor(Number(v));
+    return Number.isFinite(n) ? Math.max(lo, Math.min(hi, n)) : def;
+  };
+  return {
+    ...rest,
+    id: g.id.slice(0, 48),
+    created: Number(g.created) || Date.now(),
+    updated: Number(g.updated) || Number(g.created) || Date.now(),
+    date: typeof g.date === 'string' ? g.date.slice(0, 16) : new Date().toLocaleDateString('en-CA'),
+    venue: typeof g.venue === 'string' ? g.venue.slice(0, 80) : '',
+    innings: int(g.innings, 4, 1, 30),
+    maxOuts: int(g.maxOuts, 3, 0, 9),
+    maxBatters: int(g.maxBatters, 9, 0, 30),
+    strikeouts: g.strikeouts !== false,
+    privacyMode: Boolean(g.privacyMode),
+    teams: [t0, t1],
+    events: g.events.filter((ev) => ev && typeof ev === 'object' && typeof ev.t === 'string'),
+    signature: typeof g.signature === 'string' && g.signature.startsWith('data:image/png;base64,') ? g.signature : null,
+  };
+}
+
 // Union of game lists by id; the most recently updated copy of each wins.
 export function merge(...lists) {
   const byId = new Map();
   const dead = gone();
   for (const list of lists) {
-    for (const g of list || []) {
-      if (!g?.id || dead.has(g.id) || !Array.isArray(g.events) || !Array.isArray(g.teams)) continue;
+    for (const raw of list || []) {
+      const g = sanitizeGame(raw);
+      if (!g || dead.has(g.id)) continue;
       const have = byId.get(g.id);
       if (!have || (g.updated || 0) > (have.updated || 0)) byId.set(g.id, g);
     }

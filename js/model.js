@@ -19,16 +19,26 @@
 export const OUT_LABEL = { K: 'Strikeout', C: 'Caught out', T: 'Out (thrown/tagged)', R: 'Out running' };
 
 export function newGame(opts) {
+  const uid = typeof crypto !== 'undefined' && crypto.randomUUID
+    ? 'g-' + crypto.randomUUID().slice(0, 8)
+    : 'g' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
   return {
-    id: 'g' + Date.now().toString(36),
+    id: uid,
     created: Date.now(),
+    updated: Date.now(),
     date: opts.date,
     venue: opts.venue || '',
     innings: opts.innings,
     maxOuts: opts.maxOuts,
     maxBatters: opts.maxBatters,
     strikeouts: opts.strikeouts !== false,
-    teams: opts.teams, // [{name, players:[names], start?}], teams[0] bats first
+    privacyMode: Boolean(opts.privacyMode),
+    teams: opts.teams.map((t) => ({
+      name: t.name,
+      color: t.color,
+      players: [...t.players],
+      start: t.start ?? t.players.length,
+    })),
     // Players are sheet rows and never change index. `start` is the lineup
     // size before any mid-game additions, so replay starts from it.
     events: [],
@@ -44,15 +54,19 @@ export function batterLimit(game, team, s) {
 }
 
 export function replay(game) {
-  const teams = game.teams.map((t) => ({
-    order: Array.from({ length: t.start ?? t.players.length }, (_, i) => i), // batting order
-    cells: {}, // key "inning:player" -> cell
-    runs: [], // runs per innings
-    next: 0, // next batter index
-    bats: 0, // plate appearances so far
-    breaks: [], // {inning, player}: diagonal marking first batter of next innings
-    last: null, // last batter
-  }));
+  const teams = game.teams.map((t) => {
+    const startCount = t.start ?? t.players.length;
+    return {
+      order: Array.from({ length: startCount }, (_, i) => i), // batting order
+      rowCount: startCount, // active sheet rows (grows only if a mid-game order event is active)
+      cells: {}, // key "inning:player" -> cell
+      runs: [], // runs per innings
+      next: 0, // next batter index
+      bats: 0, // plate appearances so far
+      breaks: [], // {inning, player}: diagonal marking first batter of next innings
+      last: null, // last batter
+    };
+  });
   const s = {
     teams,
     half: 0,
@@ -71,6 +85,7 @@ export const currentInning = (s) => Math.floor(s.half / 2);
 
 function cellOf(s, team, inning, p) {
   const key = inning + ':' + p;
+  if (p + 1 > s.teams[team].rowCount) s.teams[team].rowCount = p + 1;
   return (s.teams[team].cells[key] ||= { segs: [], scored: false, out: 0, how: null });
 }
 
@@ -154,6 +169,9 @@ function apply(game, s, ev) {
   } else if (ev.t === 'order') {
     const O = s.teams[ev.team];
     O.order = [...ev.order];
+    for (const idx of ev.order) {
+      if (idx + 1 > O.rowCount) O.rowCount = idx + 1;
+    }
     if (ev.next != null) O.next = ev.next;
   } else if (ev.t === 'end') {
     T.runs[inning] ||= 0;

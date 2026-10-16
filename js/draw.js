@@ -21,12 +21,21 @@ export function fitLayout(game, width) {
   return { S, num: 28, name, title: 30, head: 22 };
 }
 
-export function gridSize(game, team, lay = L) {
-  const rows = game.teams[team].players.length;
+export function gridSize(game, team, lay = L, state = null) {
+  const rows = state?.teams?.[team]?.rowCount ?? game.teams[team].players.length;
   return {
     w: lay.num + lay.name + game.innings * lay.S + OVERHANG,
     h: lay.title + lay.head * 2 + rows * lay.S + lay.S + 2,
   };
+}
+
+// Privacy helper: formats "Ava Smith" -> "Ava S." when privacyMode is on.
+export function formatSheetPlayer(raw, privacy = false) {
+  const trimmed = String(raw || '').trim();
+  if (!trimmed || !privacy) return trimmed;
+  const parts = trimmed.split(/\s+/);
+  if (parts.length === 1) return parts[0];
+  return `${parts[0]} ${parts[parts.length - 1][0].toUpperCase()}.`;
 }
 
 // Base positions on the cell's inner circle track. Angle decreases as the
@@ -123,11 +132,12 @@ export function drawGrid(ctx, x, y, game, state, team, hi, lay = L) {
   const { S } = lay;
   const T = game.teams[team];
   const TS = state.teams[team];
-  const n = T.players.length;
+  const n = TS.rowCount ?? T.players.length;
   const gx = x + lay.num + lay.name; // first innings column
   const top = y + lay.title;
   const rowsTop = top + lay.head * 2;
   const W = lay.num + lay.name + game.innings * S;
+  const privacy = Boolean(game.privacyMode);
 
   ctx.textBaseline = 'middle';
   ctx.fillStyle = INK;
@@ -174,7 +184,8 @@ export function drawGrid(ctx, x, y, game, state, team, hi, lay = L) {
     ctx.textAlign = 'center';
     ctx.fillText(String(p + 1), x + lay.num / 2, ry + S / 2);
     ctx.textAlign = 'left';
-    ctx.fillText(fitText(ctx, T.players[p] || '', lay.name - 10), x + lay.num + 6, ry + S / 2);
+    const pName = formatSheetPlayer(T.players[p] || '', privacy);
+    ctx.fillText(fitText(ctx, pName, lay.name - 10), x + lay.num + 6, ry + S / 2);
     for (let i = 0; i < game.innings; i++) {
       const cx = gx + i * S;
       const on = hi && hi.inning === i && hi.player === p;
@@ -189,12 +200,13 @@ export function drawGrid(ctx, x, y, game, state, team, hi, lay = L) {
   // sheet: a diagonal across the next batter's unused box in the finished
   // innings, joined to a horizontal line along the top of that batter's
   // row in the next innings column (or past the grid after the last one).
+  // Lines marking who bats first in the next innings
   ctx.strokeStyle = INK;
   ctx.lineWidth = 3;
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
   for (const b of TS.breaks) {
-    if (b.inning >= game.innings) continue;
+    if (b.inning >= game.innings || b.player >= n) continue;
     const bx = gx + b.inning * S;
     const by = rowsTop + b.player * S;
     const end = b.inning + 1 < game.innings ? bx + 2 * S : bx + S + 12;
@@ -241,7 +253,7 @@ export function drawGrid(ctx, x, y, game, state, team, hi, lay = L) {
 // Renders the canvas for the live grid of one team at device resolution.
 export function renderGrid(canvas, game, state, team, hi, width) {
   const lay = width ? fitLayout(game, width) : L;
-  const { w, h } = gridSize(game, team, lay);
+  const { w, h } = gridSize(game, team, lay, state);
   const dpr = Math.max(2, window.devicePixelRatio || 1);
   canvas.width = w * dpr;
   canvas.height = h * dpr;
@@ -267,8 +279,8 @@ function fmtDate(d) {
 export function renderSheet(game, state, sigImg) {
   const M = 28;
   const gap = 36;
-  const a = gridSize(game, 0);
-  const b = gridSize(game, 1);
+  const a = gridSize(game, 0, L, state);
+  const b = gridSize(game, 1, L, state);
   const headH = 100;
   const footH = 150;
   const W = M * 2 + Math.max(a.w, b.w, 420);

@@ -8,6 +8,7 @@ export const ICON = {
   help: svg('<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5v.7"/><circle cx="12" cy="17" r=".6" fill="currentColor"/>'),
   more: svg('<circle cx="5" cy="12" r="1.3" fill="currentColor"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/><circle cx="19" cy="12" r="1.3" fill="currentColor"/>'),
   undo: svg('<path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>'),
+  redo: svg('<path d="M15 14l5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/>'),
   sheet: svg('<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/>'),
   flag: svg('<path d="M5 21V4"/><path d="M5 4h11l-2 4 2 4H5"/>'),
   share: svg('<path d="M12 3v12"/><path d="M8 7l4-4 4 4"/><path d="M20 14v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-5"/>'),
@@ -30,6 +31,11 @@ export const ICON = {
   lock: svg('<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>'),
   zoom: svg('<circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5M11 8v6M8 11h6"/>'),
   ball: svg('<circle cx="12" cy="12" r="9"/><path d="M6 5.5c2 2 2.5 4 2.5 6.5S8 16.5 6 18.5M18 5.5c-2 2-2.5 4-2.5 6.5s.5 4.5 2.5 6.5"/>'),
+  bolt: svg('<path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z"/>'),
+  sparkle: svg('<path d="M12 3l2.2 5.8L20 11l-5.8 2.2L12 19l-2.2-5.8L4 11l5.8-2.2L12 3z"/>'),
+  strikeout: svg('<path d="M18 4L6 16"/><path d="M4 18l3-3"/><circle cx="17" cy="16" r="3"/><path d="M7 5l4 4M11 5L7 9"/>'),
+  caught: svg('<path d="M7 13V7a2 2 0 0 1 4 0v4"/><path d="M11 6a2 2 0 0 1 4 0v5"/><path d="M15 8a2 2 0 0 1 4 0v6a6 6 0 0 1-6 6h-2a6 6 0 0 1-6-6v-3a2 2 0 0 1 2-2z"/><circle cx="13" cy="14" r="2.2" fill="currentColor"/>'),
+  tagged: svg('<path d="M12 4l8 8-8 8-8-8 8-8z"/><path d="M12 9v3l2 2"/>'),
 };
 
 const ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
@@ -52,11 +58,17 @@ export function sheet({ title, body = '', actions = [], onOpen }) {
           .map((a, i) => (a.label ? `<button class="btn ${a.kind || ''}" data-i="${i}">${esc(a.label)}</button>` : ''))
           .join('')}</div>` : ''}
       </div>`;
+    let closed = false;
+    const onKey = (e) => { if (e.key === 'Escape') close(null); };
     const close = (v) => {
+      if (closed) return;
+      closed = true;
+      document.removeEventListener('keydown', onKey);
       scrim.classList.add('closing');
       setTimeout(() => scrim.remove(), 180);
       resolve(v);
     };
+    document.addEventListener('keydown', onKey);
     scrim.addEventListener('click', (e) => {
       if (e.target === scrim || e.target.closest('[data-close]')) return close(null);
       const b = e.target.closest('[data-i]');
@@ -89,7 +101,7 @@ export function toast(msg, action, kind = '') {
   t.className = `toast ${kind}`;
   t.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.classList.remove('show'), action ? 4000 : 2400);
+  toastTimer = setTimeout(() => t.classList.remove('show'), action ? 4500 : 2500);
 }
 
 // Full-screen image viewer with pinch, double-tap, wheel and button zoom.
@@ -111,7 +123,7 @@ export function viewer(src, label = 'Scoresheet') {
   const stage = el.querySelector('.viewer-stage');
   const img = el.querySelector('img');
   const MAX = 5;
-  let W, H, bw, bh; // stage size and image size at scale 1 (fit whole)
+  let W, H, bw, bh;
   let s = 1, x = 0, y = 0;
 
   const clamp = () => {

@@ -64,6 +64,13 @@ function find(key) {
 
 export const teamName = (key) => { const f = find(key); return f ? f.dv.teams[f.n].name : ''; };
 
+export const teamDefaultColor = (key) => {
+  const f = find(key);
+  if (!f) return '';
+  const t = f.dv.teams[f.n];
+  return t.color || CLUBS[t.club]?.color || '';
+};
+
 // What the picked team has on a date: a game, a bye, a note, or null.
 export function fixtureOn(key, date) {
   const f = find(key);
@@ -78,14 +85,19 @@ export function fixtureOn(key, date) {
   const home = h === f.n;
   const opp = home ? a : h;
   const club = CLUBS[f.dv.teams[h].club];
-  let opponent = f.dv.teams[opp].name;
-  if (opponent === f.dv.teams[f.n].name) opponent += ` ${opp}`;
+  const oppTeam = f.dv.teams[opp];
+  const myTeamObj = f.dv.teams[f.n];
+  let opponent = oppTeam.name;
+  if (opponent === myTeamObj.name) opponent += ` ${opp}`;
   const time = club.start || f.dv.start;
   return {
     date,
     type: 'game',
     home,
     opponent,
+    oppKey: `${f.dv.id}:${opp}`,
+    teamColor: myTeamObj.color || CLUBS[myTeamObj.club]?.color || '',
+    oppColor: oppTeam.color || CLUBS[oppTeam.club]?.color || '',
     ground: club.ground,
     diamond: d,
     time,
