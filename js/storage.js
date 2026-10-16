@@ -167,8 +167,9 @@ export async function persist() {
   }
 }
 
-export function backupFile(games) {
-  const body = JSON.stringify({ app: 'tball-tracker', version: 1, exported: new Date().toISOString(), games }, null, 1);
+// `presets` is the team preset and squad, so a new phone gets them back too.
+export function backupFile(games, presets) {
+  const body = JSON.stringify({ app: 'tball-tracker', version: 1, exported: new Date().toISOString(), games, presets }, null, 1);
   const d = new Date().toLocaleDateString('en-CA');
   return new File([body], `teeball-backup-${d}.json`, { type: 'application/json' });
 }
@@ -181,7 +182,7 @@ export async function readBackup(file) {
   const s = gone();
   list.forEach((g) => s.delete(g?.id));
   try { localStorage.setItem(GONE, JSON.stringify([...s])); } catch { /* ignore */ }
-  return merge(list);
+  return { games: merge(list), presets: Array.isArray(data) ? null : data?.presets ?? null };
 }
 
 const BK = 'tball.lastBackup';

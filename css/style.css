@@ -623,6 +623,11 @@ div.field svg { position: absolute; inset: 0; width: 100%; height: 100%; filter:
 .lu-row .icon-btn.sm { flex: none; }
 .lu-row .btn.small, .lu-row .num-badge { flex: none; }
 .lu-plate { margin: 10px 0 4px; }
+.lu-picks { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 8px 0 4px; }
+.lu-picks > span { width: 100%; font-size: 12.5px; font-weight: 700; color: var(--muted); }
+.lu-picks .btn svg { width: 14px; height: 14px; }
+.lu-h em { font-style: normal; font-weight: 500; text-transform: none; letter-spacing: 0; }
+.players .not-here { flex: none; min-height: 32px; padding: 4px 9px; font-size: 12.5px; }
 @media (max-width: 360px) {
   .lu-row { gap: 2px; padding-left: 6px; }
   .lu-row .icon-btn.sm { width: 30px; height: 30px; }

@@ -366,7 +366,7 @@ ACTIONS.homeMenu = async () => {
 
 ACTIONS.backup = async () => {
   if (!games.length) return toast('No games to back up yet');
-  const file = db.backupFile(realGames());
+  const file = db.backupFile(realGames(), { myTeam, teamPresets });
   if (navigator.canShare?.({ files: [file] })) {
     try {
       await navigator.share({ files: [file], title: 'Tee-ball backup' });
@@ -389,9 +389,10 @@ function restore() {
   inp.accept = '.json,application/json';
   inp.onchange = async () => {
     try {
-      const incoming = await db.readBackup(inp.files[0]);
+      const { games: incoming, presets } = await db.readBackup(inp.files[0]);
       const before = games.length;
       games = db.merge(games, incoming);
+      restorePresets(presets);
       db.saveAll(games);
       toast(`Restored. ${games.length - before} new game${games.length - before === 1 ? '' : 's'} added.`);
       renderHome();
@@ -400,6 +401,27 @@ function restore() {
     }
   };
   inp.click();
+}
+
+// Adds the team preset and squad from a backup without removing anything
+// already on this phone: missing settings are filled in, squads are merged.
+function restorePresets(p) {
+  if (!p || typeof p !== 'object') return;
+  if (!myTeam && typeof p.myTeam === 'string' && teamName(p.myTeam)) {
+    myTeam = p.myTeam;
+    store.set('tball.myTeam', myTeam);
+  }
+  for (const [key, v] of Object.entries(p.teamPresets || {})) {
+    if (!v || typeof v !== 'object') continue;
+    const have = teamPresets[key] || {};
+    const merged = { ...have };
+    if (!have.color && safeColor(v.color, '')) merged.color = v.color;
+    if (!have.players?.length && Array.isArray(v.players)) merged.players = v.players.map((n) => String(n ?? '').slice(0, 24)).slice(0, 40);
+    teamPresets[key] = merged;
+    if (Array.isArray(v.squad)) setSquad([...(have.squad || []), ...v.squad], key);
+  }
+  store.set('tball.teamPresets', teamPresets);
+  ensureSquad();
 }
 
 function saveFile(file) {
@@ -433,7 +455,10 @@ function getDeviceTeamData(name, fxKey = '') {
     : null;
   const defColor = fxKey ? teamDefaultColor(fxKey) : '';
   const color = safeColor(byKey?.color || byName?.color || fromGames?.color || defColor, '');
-  const players = Array.isArray(byKey?.players) && byKey.players.length
+  const squad = fxKey ? squadOf(fxKey) : null;
+  const players = squad?.length
+    ? [...squad]
+    : Array.isArray(byKey?.players) && byKey.players.length
     ? [...byKey.players]
     : Array.isArray(byName?.players) && byName.players.length
       ? [...byName.players]
@@ -451,6 +476,42 @@ function saveDeviceTeamData(name, fxKey, color, players) {
   if (fxKey) teamPresets[fxKey] = { ...(teamPresets[fxKey] || {}), ...entry };
   if (name) teamPresets[name] = { ...(teamPresets[name] || {}), ...entry };
   store.set('tball.teamPresets', teamPresets);
+}
+
+// The full squad of the user's own team, kept on this phone (and in backup
+// files). Each game starts from it in squad order; children missing that
+// day are marked Not here, so the squad itself never shrinks.
+function squadOf(key = myTeam) {
+  return key && Array.isArray(teamPresets[key]?.squad) ? teamPresets[key].squad : null;
+}
+function setSquad(names, key = myTeam) {
+  if (!key) return;
+  const clean = [...new Set(names.map((n) => String(n ?? '').trim().slice(0, 24)).filter(Boolean))];
+  teamPresets[key] = { ...(teamPresets[key] || {}), squad: clean };
+  store.set('tball.teamPresets', teamPresets);
+}
+// A team picked before squads existed starts from its latest player list.
+function ensureSquad() {
+  if (myTeam && !squadOf()) setSquad(getDeviceTeamData(teamName(myTeam), myTeam).players);
+}
+ensureSquad();
+const isOwn = (name) => !!myTeam && !!name && name === teamName(myTeam);
+// Named players not in the squad yet, for the "Add to the squad?" prompt.
+function notInSquad(names) {
+  const s = squadOf();
+  return s ? [...new Set(names.map((n) => (n || '').trim()).filter((n) => n && !s.includes(n)))] : [];
+}
+async function offerSquadAdd(names) {
+  if (!names.length) return;
+  const one = names.length === 1;
+  const ok = await confirmSheet(
+    'Add to the squad?',
+    `${names.join(', ')} ${one ? "isn't" : "aren't"} in your ${teamName(myTeam)} squad yet. Add ${one ? 'them' : 'them all'} so ${one ? 'they show' : 'they show'} up in future games?`,
+    'Add to squad',
+  );
+  if (!ok) return;
+  setSquad([...squadOf(), ...names]);
+  toast(`Added to the squad: ${names.join(', ')}`);
 }
 
 function distinctColor(preferred, avoid) {
@@ -675,8 +736,14 @@ function setupPlayers() {
   const i = draft.tab;
   const t = draft.teams[i];
   const locked = draft.locked[i];
+  // The user's own team starts from the squad: mark who isn't here instead
+  // of deleting them.
+  const squad = !draft.editing && isOwn(t.name) ? squadOf() : null;
+  const out = t.out || [];
   return `
-    <p class="lead">Add players in batting order. Tip: paste a comma-separated list to add the whole team at once, or leave blank for numbers (#1, #2…).</p>
+    <p class="lead">${squad
+      ? 'Your squad, in squad order. Tap <b>Not here</b> for anyone missing today, then drag to set today\'s batting order.'
+      : 'Add players in batting order. Tip: paste a comma-separated list to add the whole team at once, or leave blank for numbers (#1, #2…).'}</p>
     <div class="segmented">${draft.teams.map((tm, k) => `
       <button class="${k === i ? 'on' : ''}" data-action="tab" data-t="${k}" style="--team:${safeColor(tm.color, COLORS[k])}">
         <i></i><span class="seg-name">${esc(tm.name || (k ? 'Team 2' : 'Team 1'))}</span> <small>${tm.players.length}</small></button>`).join('')}
@@ -691,11 +758,16 @@ function setupPlayers() {
         <li data-k="${k}" class="${k < locked ? 'locked' : ''}">
           <span class="num">${k + 1}</span>
           <input class="input bare" data-bind="player:${i}:${k}" value="${esc(p)}" placeholder="#${k + 1}" aria-label="Player ${k + 1} name" enterkeyhint="${k < t.players.length - 1 ? 'next' : 'done'}" maxlength="24">
-          <button class="icon-btn sm" data-action="removePlayer" data-k="${k}" ${k < locked ? 'disabled' : ''} aria-label="Remove">${ICON.x}</button>
+          ${squad && p.trim() && squad.includes(p.trim())
+            ? `<button class="btn small ghost not-here" data-action="notHere" data-k="${k}">Not here</button>`
+            : `<button class="icon-btn sm" data-action="removePlayer" data-k="${k}" ${k < locked ? 'disabled' : ''} aria-label="Remove">${ICON.x}</button>`}
           ${k < locked ? `<span class="grip off" aria-hidden="true">${ICON.lock}</span>`
             : `<span class="grip" data-grip="${k}" role="button" aria-label="Drag to reorder ${esc(p || `player ${k + 1}`)}">${ICON.grip}</span>`}
         </li>`).join('')}
     </ol>
+    ${out.length ? `<h4 class="lu-h">Not here today</h4><ul class="lu-list">${out.map((n, k) => `
+      <li class="lu-row gone"><span class="lu-name">${esc(n)}</span>
+        <button class="btn small ghost" data-action="isHere" data-k="${k}">Here</button></li>`).join('')}</ul>` : ''}
     ${t.players.length ? '' : `<div class="empty small"><p>No players yet.</p>
       <button class="btn ghost" data-action="quickFill">Add 9 numbered players</button></div>`}`;
 }
@@ -748,6 +820,7 @@ function bindSetupInputs() {
   app.querySelector('[data-bind="date"]')?.addEventListener('change', refill);
   app.querySelector('#my-team')?.addEventListener('change', (e) => {
     myTeam = e.target.value;
+    ensureSquad();
     if (!draft.editing) carryTeam();
     store.set('tball.myTeam', myTeam);
     refill();
@@ -880,6 +953,17 @@ function bindPlayerDrag() {
   });
 }
 ACTIONS.removePlayer = (el) => { draft.teams[draft.tab].players.splice(+el.dataset.k, 1); renderSetup(); };
+ACTIONS.notHere = (el) => {
+  const t = draft.teams[draft.tab];
+  (t.out ||= []).push(...t.players.splice(+el.dataset.k, 1));
+  renderSetup();
+};
+// Back in today's lineup, at the end of the batting order.
+ACTIONS.isHere = (el) => {
+  const t = draft.teams[draft.tab];
+  t.players.push(...t.out.splice(+el.dataset.k, 1));
+  renderSetup();
+};
 ACTIONS.innings = (el) => { draft.innings += +el.dataset.d; renderSetup(); };
 ACTIONS.strikeouts = (el) => { draft.strikeouts = el.checked; };
 ACTIONS.preset = (el) => {
@@ -934,6 +1018,8 @@ ACTIONS.setupNext = () => {
   redoStack = [];
   save();
   go('score');
+  const mine = opts.teams.find((t) => isOwn(t.name));
+  if (mine) offerSquadAdd(notInSquad(mine.players));
 };
 
 // ---------- scoring ----------
@@ -1671,6 +1757,8 @@ ACTIONS.lineup = async () => {
     names: [...t.players.slice(0, state.teams[i].rowCount ?? t.players.length)],
     order: [...state.teams[i].order],
   }));
+  const base = drafts.map((d) => d.names.length); // names added in this sheet are late arrivals
+  let picks = [];
   const bt = phase() === 'bat' ? battingTeam(state) : null;
   const inning = bt == null ? 0 : currentInning(state);
   const canBat = (p) => !state.teams[bt].cells[inning + ':' + p] && !state.runners.includes(p);
@@ -1683,6 +1771,8 @@ ACTIONS.lineup = async () => {
     const free = batting ? d.order.filter(canBat) : [];
     if (batting && !free.includes(atBat)) atBat = free.includes(nextAfterChange(team, d.order)) ? nextAfterChange(team, d.order) : free[0] ?? null;
     const next = batting ? atBat : d.order.length ? nextAfterChange(team, d.order) : null;
+    // Squad players not in this game yet, for a one-tap late arrival.
+    picks = isOwn(game.teams[team].name) ? (squadOf() || []).filter((n) => !d.names.some((x) => x.trim() === n)) : [];
     const plate = batting && free.length ? `
       <label class="field lu-plate"><span>At the plate <em>pick who is really batting; the order carries on after them</em></span>
         <select class="input" id="lu-atbat">${free.map((p) => `<option value="${p}" ${p === atBat ? 'selected' : ''}>${p + 1}. ${esc(d.names[p] || `Batter #${p + 1}`)}</option>`).join('')}</select></label>` : '';
@@ -1704,6 +1794,7 @@ ACTIONS.lineup = async () => {
       <ol class="lu-list">${d.order.map(row).join('')}</ol>
       <div class="add-row"><input class="input" id="lu-new" placeholder="Late arrival: name (optional)" maxlength="24" enterkeyhint="done" autocomplete="off">
         <button class="btn primary" data-lu="add">${ICON.plus}<span class="sr">Add</span></button></div>
+      ${picks.length ? `<div class="lu-picks"><span>From your squad</span>${picks.map((n, i) => `<button class="btn small ghost" data-lu="pick" data-n="${i}">${ICON.plus}${esc(n)}</button>`).join('')}</div>` : ''}
       ${gone.length ? `<h4 class="lu-h">Left the game</h4><ul class="lu-list">${gone.map((p) => `
         <li class="lu-row gone"><span class="num-badge sm" style="--team:${color}">${p + 1}</span><span class="lu-name">${esc(d.names[p] || `#${p + 1}`)}</span>
           <button class="btn small ghost" data-lu="back" data-p="${p}">Back in</button></li>`).join('')}</ul>` : ''}`;
@@ -1739,6 +1830,10 @@ ACTIONS.lineup = async () => {
           d.names.push(sh.querySelector('#lu-new').value.trim());
           d.order.push(d.names.length - 1);
         }
+        if (a === 'pick') {
+          d.names.push(picks[+b.dataset.n]);
+          d.order.push(d.names.length - 1);
+        }
         draw();
         if (a === 'add') sh.querySelector('#lu-new').focus();
       });
@@ -1762,6 +1857,8 @@ ACTIONS.lineup = async () => {
   if (bt != null && atBat != null && atBat !== batterUp(bt)) upNext = atBat;
   renderScore();
   if (!evs.length) toast(upNext != null ? `${shortName(bt, upNext)} is at the plate` : 'Lineup saved');
+  const mine = game.teams.findIndex((t) => isOwn(t.name));
+  if (mine >= 0) offerSquadAdd(notInSquad(drafts[mine].names.slice(base[mine])));
 };
 
 ACTIONS.gridTeam = (el) => { gridTeam = +el.dataset.t; renderSheetTab(); };
@@ -1772,6 +1869,8 @@ ACTIONS.presetTeam = async () => {
   let pickedName = teamName(pickedKey);
   let pickedColor = getDeviceTeamData(pickedName, pickedKey).color || teamDefaultColor(pickedKey) || COLORS[0];
   let shEl = null;
+  const squadFor = (key) => (key ? [...(squadOf(key) || getDeviceTeamData(teamName(key), key).players.filter(Boolean))] : []);
+  let squad = squadFor(pickedKey);
 
   const renderBody = () => {
     pickedName = teamName(pickedKey);
@@ -1798,18 +1897,28 @@ ACTIONS.presetTeam = async () => {
           </div>
         </div>
         <div class="card" style="background:var(--surface-2);margin-top:12px;margin-bottom:4px">
-          <div class="gc-row"><i style="background:${pickedColor}"></i><span>${esc(pickedName)}</span><small class="muted">${info.players.filter(Boolean).length || info.players.length || 0} saved players</small></div>
+          <div class="gc-row"><i style="background:${pickedColor}"></i><span>${esc(pickedName)}</span><small class="muted">${squad.length} in squad</small></div>
           ${match ? `
             <div class="gc-row" style="margin-top:4px"><i style="background:${oppColor}"></i><span>v ${esc(match.opponent)} (${match.home ? 'home' : 'away'})</span></div>
             <div class="gc-meta"><span><b>${esc(fmtDate(match.date))}</b> · ${esc(match.venue)}</span></div>
           ` : `<p class="muted" style="margin:6px 0 0">No upcoming fixture games found.</p>`}
         </div>
+        <h4 class="lu-h">Squad <em>full list, in your usual batting order. Kept on this phone only.</em></h4>
+        <ol class="lu-list">${squad.map((n, k) => `
+          <li class="lu-row"><span class="lu-pos">${k + 1}</span>
+            <input class="input bare" data-sq="${k}" value="${esc(n)}" placeholder="Name" maxlength="24" aria-label="Squad player ${k + 1}">
+            <button type="button" class="icon-btn sm" data-sq-act="up" data-k="${k}" ${k ? '' : 'disabled'} aria-label="Earlier">${ICON.up}</button>
+            <button type="button" class="icon-btn sm" data-sq-act="down" data-k="${k}" ${k < squad.length - 1 ? '' : 'disabled'} aria-label="Later">${ICON.down}</button>
+            <button type="button" class="icon-btn sm" data-sq-act="del" data-k="${k}" aria-label="Remove ${esc(n)} from squad">${ICON.x}</button></li>`).join('')}</ol>
+        <div class="add-row"><input class="input" id="sq-new" placeholder="Add a player (or paste a list)" maxlength="300" autocomplete="off" enterkeyhint="done">
+          <button type="button" class="btn primary" data-sq-act="add">${ICON.plus}<span class="sr">Add</span></button></div>
       ` : ''}`;
 
     shEl.querySelector('#preset-team-select')?.addEventListener('change', (e) => {
       pickedKey = e.target.value;
       pickedName = teamName(pickedKey);
       pickedColor = getDeviceTeamData(pickedName, pickedKey).color || teamDefaultColor(pickedKey) || COLORS[0];
+      squad = squadFor(pickedKey);
       renderBody();
     });
     shEl.querySelectorAll('[data-preset-color]').forEach((btn) => {
@@ -1829,12 +1938,29 @@ ACTIONS.presetTeam = async () => {
     onOpen(sh) {
       shEl = sh;
       renderBody();
+      sh.addEventListener('input', (e) => {
+        const k = e.target.dataset.sq;
+        if (k != null) squad[+k] = e.target.value;
+      });
+      sh.addEventListener('click', (e) => {
+        const b = e.target.closest('[data-sq-act]');
+        if (!b) return;
+        const k = +b.dataset.k;
+        const a = b.dataset.sqAct;
+        if (a === 'up') [squad[k - 1], squad[k]] = [squad[k], squad[k - 1]];
+        if (a === 'down') [squad[k + 1], squad[k]] = [squad[k], squad[k + 1]];
+        if (a === 'del') squad.splice(k, 1);
+        if (a === 'add') squad.push(...sh.querySelector('#sq-new').value.split(/[\n,]+/).map((n) => n.trim().slice(0, 24)).filter(Boolean));
+        renderBody();
+        if (a === 'add') sh.querySelector('#sq-new')?.focus();
+      });
     },
   });
 
   if (res !== 'save') return;
   myTeam = pickedKey;
   store.set('tball.myTeam', myTeam);
+  if (myTeam) setSquad(squad);
   if (myTeam) {
     const own = teamName(myTeam);
     const existingPlayers = getDeviceTeamData(own, myTeam).players;
@@ -1945,6 +2071,7 @@ ACTIONS.help = () =>
           <h5>Before the game</h5>
           <ul>
             <li>Set up the game at home: teams in batting order and the innings rule.</li>
+            <li>Set your team in <b>Preset my team</b> and add your full squad there. Each new game starts from it: tap <b>Not here</b> for anyone missing, then drag to set the batting order.</li>
             <li>Install the app so it works with no signal.</li>
           </ul>
           <h5>Each batter</h5>
@@ -2240,6 +2367,14 @@ document.addEventListener('keydown', (e) => {
         input.blur();
       }
     }
+    return;
+  }
+
+  // Preset sheet: add to the squad
+  if (input.id === 'sq-new') {
+    e.preventDefault();
+    if (input.value.trim()) input.closest('.bsheet')?.querySelector('[data-sq-act="add"]')?.click();
+    else input.blur();
     return;
   }
 
