@@ -51,6 +51,7 @@ function save() {
   if (!db.saveAll(games) && !db.healthy()) toast('Could not save on this device. Back up your games.');
 }
 let tips = store.get('tball.tips', true);
+let shortcuts = store.get('tball.shortcuts', true); // Game day guide / Sample game on home
 
 // Seed a realistic sample game on first run if no games exist yet so the user can test every screen immediately.
 // The sample game is kept out of backups, reminders and carried-over teams.
@@ -123,6 +124,7 @@ let redoStack = []; // holds popped event groups for Redo
 
 function go(view, arg, fromPop = false) {
   current = view;
+  document.body.dataset.view = view;
   selected = null;
   pending = null;
   upNext = null;
@@ -247,15 +249,23 @@ function renderHome() {
         <span><b>New game</b><small>Set up teams in under a minute</small></span>
         ${ICON.chevron}
       </button>
-      <div class="home-quick-row">
-        <button class="guide-link" data-action="help">${ICON.bulb}<span><b>Game day guide</b><small>How to score step by step</small></span>${ICON.chevron}</button>
-        <button class="guide-link" data-action="loadDemo">${ICON.sparkle}<span><b>Sample game</b><small>Open a live 2nd-innings demo</small></span>${ICON.chevron}</button>
-      </div>
+      ${shortcuts ? `<div class="quick-links">
+        <button class="quick-link" data-action="help">${ICON.bulb}<span>Game guide</span></button>
+        <button class="quick-link" data-action="loadDemo">${ICON.sparkle}<span>Sample game</span></button>
+        <button class="icon-btn sm quick-hide" data-action="hideShortcuts" aria-label="Hide shortcuts">${ICON.x}</button>
+      </div>` : ''}
       ${live.length ? `<h2 class="section">In progress</h2>${live.map(gameCard).join('')}` : ''}
       ${done.length ? `<h2 class="section">Finished</h2>${done.map(gameCard).join('')}` : ''}
-      ${games.length ? '' : `<div class="empty">${ART.diamond}<p>No games yet. Tap <b>New game</b> or <b>Sample game</b> to start scoring.</p></div>`}
+      ${games.length ? '' : `<div class="empty">${ART.diamond}<p>No games yet. Tap <b>New game</b> to start scoring${shortcuts ? ', or try the <b>Sample game</b>' : ''}.</p></div>`}
     </main>`;
 }
+
+ACTIONS.hideShortcuts = () => {
+  shortcuts = false;
+  store.set('tball.shortcuts', false);
+  renderHome();
+  toast('Shortcuts hidden. Bring them back from ⋯ on this screen');
+};
 
 ACTIONS.loadDemo = () => {
   const existing = games.find((g) => g.id === DEMO_ID);
@@ -342,9 +352,13 @@ ACTIONS.homeMenu = async () => {
         <button class="menu-item" data-i="2">${ICON.shield}<span><b>Preset my team</b><small>${own ? `${esc(own)} · auto-fills opponent, colours &amp; venue` : 'Choose your team for automatic game-day setup'}</small></span></button>
         <button class="menu-item" data-i="0">${ICON.download}<span><b>Back up all games</b><small>Save or send a backup file (e.g. to Files, Drive or email)</small></span></button>
         <button class="menu-item" data-i="1">${ICON.upload}<span><b>Restore from backup</b><small>Adds games from a backup file; nothing is overwritten with older data</small></span></button>
+        <button class="menu-item" data-i="3">${ICON.sparkle}<span><b>Sample game</b><small>Open a live 2nd-innings demo</small></span></button>
+        <button class="menu-item" data-i="4">${ICON.bulb}<span><b>${shortcuts ? 'Hide' : 'Show'} home shortcuts</b><small>Game day guide and Sample game buttons</small></span></button>
       </div>`,
-    actions: [{ value: 'backup' }, { value: 'restore' }, { value: 'presetTeam' }],
+    actions: [{ value: 'backup' }, { value: 'restore' }, { value: 'presetTeam' }, { value: 'demo' }, { value: 'shortcuts' }],
   });
+  if (v === 'demo') ACTIONS.loadDemo();
+  if (v === 'shortcuts') { shortcuts = !shortcuts; store.set('tball.shortcuts', shortcuts); renderHome(); }
   if (v === 'presetTeam') ACTIONS.presetTeam();
   if (v === 'backup') ACTIONS.backup();
   if (v === 'restore') restore();
@@ -1347,11 +1361,7 @@ function panel(ph, bt) {
       <section class="panel">
         <div class="batter-row"><span class="num-badge" style="--team:${tc}">${p + 1}</span>
           <div><small>Up to bat · ${esc(game.teams[bt].name)}${upNext != null ? ' (out of order)' : ''}</small><h2>${esc(playerName(bt, p))}</h2></div>
-        </div>
-        <div class="batter-subbar">
-          <button class="not-batter-pill" data-action="pickBatter" title="Pick who is batting">${ICON.swap}<span>Not ${esc(shortName(bt, p))}? Pick batter</span></button>
-          <button class="btn small ghost lineup-btn" data-action="lineup">${ICON.sheet}<span>Lineup</span></button>
-          ${game.events.length === 0 ? `<button class="btn small ghost lineup-btn" data-action="swapInGame">${ICON.swap}<span>Swap batting team</span></button>` : ''}
+          <button class="btn small ghost lineup-btn" data-action="lineup" aria-label="Lineup and who is batting">${ICON.sheet}<span>Lineup</span></button>
         </div>
         ${coachTip(ph, bt)}
         <h3 class="group safe-t">Safe on</h3>
@@ -1491,7 +1501,31 @@ function renderScore() {
       </main>
       ${ph === 'confirm' ? confirmBar() : tabBar('score')}
     </div>`;
+  fitField();
 }
+
+// Sizes the diamond to the space left above the batter panel, keeping the
+// drawing's proportions so runner badges sit on their bases. Pop-up
+// messages go over the diamond so they never hide the score.
+function fitField() {
+  const card = app.querySelector('.score-screen .field-card');
+  const f = card?.querySelector('div.field');
+  if (f) {
+    f.style.width = f.style.height = '0px';
+    const cs = getComputedStyle(card);
+    const others = [...card.children]
+      .filter((c) => c !== f && getComputedStyle(c).position !== 'absolute')
+      .reduce((h, c) => h + c.offsetHeight, 0);
+    const h = card.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom) - others - 2;
+    const w = card.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    const fw = Math.max(0, Math.min(w, (h * 300) / 245));
+    f.style.width = `${fw}px`;
+    f.style.height = `${(fw * 245) / 300}px`;
+  }
+  const anchor = card?.getBoundingClientRect().top ?? app.querySelector('.score-screen .scoreboard')?.getBoundingClientRect().bottom;
+  document.documentElement.style.setProperty('--toast-top', anchor != null ? `${Math.round(anchor + 8)}px` : '');
+}
+window.addEventListener('resize', () => { if (current === 'score') fitField(); });
 
 // ---------- scoresheet tab ----------
 function renderSheetTab() {
@@ -1551,20 +1585,24 @@ ACTIONS.bat = (el) => {
   renderScore();
 };
 ACTIONS.dest = (el) => {
-  const y = window.scrollY;
   pending.rows[+el.dataset.i].pick = +el.dataset.to;
   settle();
   buzz(6);
-  renderScore();
-  window.scrollTo(0, y);
+  keepMovesScroll(renderScore);
 };
 ACTIONS.outAt = (el) => {
-  const y = window.scrollY;
   pending.rows[+el.dataset.i].outAt = +el.dataset.b;
   buzz(6);
-  renderScore();
-  window.scrollTo(0, y);
+  keepMovesScroll(renderScore);
 };
+// The runner list scrolls on its own when there are many runners; keep its
+// place when a tap redraws the screen.
+function keepMovesScroll(render) {
+  const y = app.querySelector('.moves')?.scrollTop || 0;
+  render();
+  const m = app.querySelector('.moves');
+  if (m) m.scrollTop = y;
+}
 ACTIONS.confirmPlay = () => { if (!tooSoon()) confirmPlay(); };
 ACTIONS.cancelPlay = () => { pending = null; renderScore(); };
 ACTIONS.pick = (el) => {
@@ -1612,7 +1650,7 @@ ACTIONS.extraInnings = () => {
 function nextAfterChange(team, order) {
   const T = state.teams[team];
   // Before the team has batted the first in the order leads off; after that
-  // whoever is up stays up (use Not Sam? to change it) unless they left.
+  // whoever is up stays up (change it with At the plate) unless they left.
   if (!T.bats) return order[0];
   const cur = team === battingTeam(state) ? batterUp(team) : T.next;
   if (order.includes(cur)) return cur;
@@ -1624,31 +1662,45 @@ function nextAfterChange(team, order) {
   return order[0];
 }
 
+// Batting out of order is picked here too ("At the plate"): only players
+// who haven't batted this innings and aren't on base, since each gets one
+// box per innings on the sheet. The order carries on after them.
 ACTIONS.lineup = async () => {
   let team = state.over ? 0 : battingTeam(state);
   const drafts = game.teams.map((t, i) => ({
     names: [...t.players.slice(0, state.teams[i].rowCount ?? t.players.length)],
     order: [...state.teams[i].order],
   }));
+  const bt = phase() === 'bat' ? battingTeam(state) : null;
+  const inning = bt == null ? 0 : currentInning(state);
+  const canBat = (p) => !state.teams[bt].cells[inning + ':' + p] && !state.runners.includes(p);
+  let atBat = bt == null ? null : batterUp(bt);
   let el = null;
   const draw = () => {
     const d = drafts[team];
     const color = safeColor(game.teams[team].color, COLORS[team]);
-    const next = d.order.length ? nextAfterChange(team, d.order) : null;
+    const batting = team === bt;
+    const free = batting ? d.order.filter(canBat) : [];
+    if (batting && !free.includes(atBat)) atBat = free.includes(nextAfterChange(team, d.order)) ? nextAfterChange(team, d.order) : free[0] ?? null;
+    const next = batting ? atBat : d.order.length ? nextAfterChange(team, d.order) : null;
+    const plate = batting && free.length ? `
+      <label class="field lu-plate"><span>At the plate <em>pick who is really batting; the order carries on after them</em></span>
+        <select class="input" id="lu-atbat">${free.map((p) => `<option value="${p}" ${p === atBat ? 'selected' : ''}>${p + 1}. ${esc(d.names[p] || `Batter #${p + 1}`)}</option>`).join('')}</select></label>` : '';
     const gone = d.names.map((_, p) => p).filter((p) => !d.order.includes(p));
     const row = (p, k) => `
       <li class="lu-row ${p === next ? 'next' : ''}">
         <span class="lu-pos">${k + 1}</span>
         <span class="num-badge sm" style="--team:${color}">${p + 1}</span>
         <input class="input bare" data-lu-name="${p}" value="${esc(d.names[p])}" placeholder="#${p + 1}" maxlength="24" enterkeyhint="${k < d.order.length - 1 ? 'next' : 'done'}" aria-label="Player ${p + 1} name">
-        ${p === next ? '<em>Next</em>' : ''}
+        ${p === next ? `<em>${batting ? 'At bat' : 'Next'}</em>` : ''}
         <button class="icon-btn sm" data-lu="up" data-k="${k}" ${k ? '' : 'disabled'} aria-label="Bat earlier">${ICON.up}</button>
         <button class="icon-btn sm" data-lu="down" data-k="${k}" ${k < d.order.length - 1 ? '' : 'disabled'} aria-label="Bat later">${ICON.down}</button>
         <button class="btn small out" data-lu="left" data-k="${k}">Left</button>
       </li>`;
     el.querySelector('.bsheet-body').innerHTML = `
       <div class="segmented">${game.teams.map((t, i) => `<button class="${i === team ? 'on' : ''}" data-lu="team" data-t="${i}" style="--team:${safeColor(t.color, COLORS[i])}"><i></i><span class="seg-name">${esc(t.name)}</span></button>`).join('')}</div>
-      <p class="muted">Changes apply from the next batter. Plays already recorded keep their players.</p>
+      ${plate}
+      <p class="muted">Order changes apply from the next batter. Plays already recorded keep their players.</p>
       <ol class="lu-list">${d.order.map(row).join('')}</ol>
       <div class="add-row"><input class="input" id="lu-new" placeholder="Late arrival: name (optional)" maxlength="24" enterkeyhint="done" autocomplete="off">
         <button class="btn primary" data-lu="add">${ICON.plus}<span class="sr">Add</span></button></div>
@@ -1662,6 +1714,9 @@ ACTIONS.lineup = async () => {
     onOpen(sh) {
       el = sh;
       draw();
+      sh.addEventListener('change', (e) => {
+        if (e.target.id === 'lu-atbat') { atBat = +e.target.value; draw(); }
+      });
       sh.addEventListener('input', (e) => {
         const k = e.target.dataset.luName;
         if (k != null) drafts[team].names[+k] = e.target.value;
@@ -1702,28 +1757,13 @@ ACTIONS.lineup = async () => {
   });
   upNext = null;
   if (evs.length) commitPlay(evs, 'lineup changed');
-  else { save(); renderScore(); toast('Player names updated'); }
+  else save();
+  // After the order is saved, whoever isn't next in it bats out of order.
+  if (bt != null && atBat != null && atBat !== batterUp(bt)) upNext = atBat;
+  renderScore();
+  if (!evs.length) toast(upNext != null ? `${shortName(bt, upNext)} is at the plate` : 'Lineup saved');
 };
 
-// Batting out of order: choose who is really up. Only players who haven't
-// batted this innings, since each gets one box per innings on the sheet.
-ACTIONS.pickBatter = async () => {
-  const bt = battingTeam(state);
-  const inning = currentInning(state);
-  const cells = state.teams[bt].cells;
-  const free = state.teams[bt].order.filter((p) => !cells[inning + ':' + p] && !state.runners.includes(p));
-  const color = safeColor(game.teams[bt].color, COLORS[bt]);
-  const v = await sheet({
-    title: 'Who is batting?',
-    body: `<p class="muted">Pick the player at the plate. The batting order carries on after them.</p>
-      <div class="menu-list">${free.map((p, i) => `<button class="menu-item ${p === batterUp(bt) ? 'on' : ''}" data-i="${i}">
-        <span class="num-badge sm" style="--team:${color}">${p + 1}</span><span><b>${esc(playerName(bt, p))}</b>${p === state.teams[bt].next ? '<small>Next in order</small>' : ''}</span></button>`).join('')}</div>`,
-    actions: free.map((p) => ({ value: p })),
-  });
-  if (v == null) return;
-  upNext = v === state.teams[bt].next ? null : v;
-  renderScore();
-};
 ACTIONS.gridTeam = (el) => { gridTeam = +el.dataset.t; renderSheetTab(); };
 ACTIONS.hideTips = () => { tips = false; store.set('tball.tips', false); renderScore(); };
 
@@ -1853,21 +1893,18 @@ ACTIONS.swapInGame = () => {
 
 ACTIONS.menu = async () => {
   const own = teamName(myTeam);
-  const canSwap = game.events.length === 0 && !state.over;
   const v = await sheet({
     title: 'Game options',
     body: '<div class="menu-list">' +
-      (canSwap ? `<button class="menu-item" data-i="7">${ICON.swap}<span><b>Swap batting team</b><small>Let ${esc(game.teams[1].name)} bat first instead</small></span></button>` : '' ) +
       `<button class="menu-item" data-i="6">${ICON.shield}<span><b>Preset my team</b><small>${own ? `${esc(own)} · auto-fills opponent, colours &amp; venue` : 'Set your team on this device'}</small></span></button>` +
       `<button class="menu-item" data-i="4">${ICON.help}<span><b>Help</b><small>Game day guide, rules and symbols</small></span></button>` +
-      (state.over ? '' : `<button class="menu-item" data-i="5">${ICON.sheet}<span><b>Lineup</b><small>Late arrival, player left, batting order</small></span></button>`) +
+      (state.over ? '' : `<button class="menu-item" data-i="5">${ICON.sheet}<span><b>Lineup</b><small>Who is batting, late arrival, player left, order</small></span></button>`) +
       `<button class="menu-item" data-i="0">${ICON.edit}<span><b>Edit game</b><small>Names, innings, rules</small></span></button>` +
       (state.over ? '' : `<button class="menu-item" data-i="1">${ICON.flag}<span><b>End innings now</b><small>Before the limit is reached</small></span></button>`) +
       (state.over ? '' : `<button class="menu-item" data-i="2">${ICON.whistle}<span><b>End game now</b><small>E.g. time ran out</small></span></button>`) +
       `<button class="menu-item danger" data-i="3">${ICON.trash}<span><b>Delete game</b></span></button></div>`,
-    actions: [{ value: 'edit' }, { value: 'endHalf' }, { value: 'over' }, { value: 'delete' }, { value: 'help' }, { value: 'lineup' }, { value: 'presetTeam' }, { value: 'swapInGame' }],
+    actions: [{ value: 'edit' }, { value: 'endHalf' }, { value: 'over' }, { value: 'delete' }, { value: 'help' }, { value: 'lineup' }, { value: 'presetTeam' }],
   });
-  if (v === 'swapInGame') ACTIONS.swapInGame();
   if (v === 'presetTeam') ACTIONS.presetTeam();
   if (v === 'help') ACTIONS.help();
   if (v === 'lineup') ACTIONS.lineup();
@@ -1915,7 +1952,7 @@ ACTIONS.help = () =>
             <li>Tap where the batter ended up, or how they got out.</li>
             <li>If anyone was on base, a list appears. Forced advances are pre-selected; tap any runner to adjust (<b>Stayed</b>, a base, <b>Home</b> or <b>Out</b>) and <b>Confirm</b>.</li>
             <li>Tapped <b>Out</b>? Also tap the base they were out at.</li>
-            <li>Wrong child at the plate? Tap <b>Not Sam?</b> under their name and pick who is batting.</li>
+            <li>Wrong child at the plate? Tap <b>Lineup</b> and pick who is <b>At the plate</b>.</li>
             <li>Check the diamond preview, then <b>Confirm</b>. A banner repeats what was saved, with <b>Undo</b>.</li>
             <li>Late arrival, someone left, or the order was wrong? Tap <b>Lineup</b> next to the batter. Changes apply from the next batter and never alter plays already saved.</li>
             <li>Stand where you can see every base. A helper calling out plays makes it easy.</li>
