@@ -923,6 +923,13 @@ function makeSortable(list, min, onMove) {
     refocus(to);
   });
 
+  // Phones treat a held finger as a long press (text selection, copy menu,
+  // context menu) unless the touch itself is claimed by the grip.
+  const onGrip = (e) => { if (e.target.closest('[data-grip]')) e.preventDefault(); };
+  list.addEventListener('touchstart', onGrip, { passive: false });
+  list.addEventListener('contextmenu', onGrip);
+  list.addEventListener('selectstart', onGrip);
+
   list.addEventListener('pointerdown', (e) => {
     const grip = e.target.closest('[data-grip]');
     if (!grip) return;
@@ -1825,8 +1832,8 @@ ACTIONS.lineup = async () => {
       </li>`;
     el.querySelector('.bsheet-body').innerHTML = `
       <div class="lu-top">
-        <div class="segmented thin">${game.teams.map((t, i) => `<button class="${i === team ? 'on' : ''}" data-lu="team" data-t="${i}" style="--team:${safeColor(t.color, COLORS[i])}"><i></i><span class="seg-name">${esc(t.name)}</span></button>`).join('')}</div>
         <button class="icon-btn sm lu-info ${help ? 'on' : ''}" data-lu="info" aria-expanded="${help}" aria-label="How Lineup works">${ICON.info}</button>
+        <div class="segmented thin">${game.teams.map((t, i) => `<button class="${i === team ? 'on' : ''}" data-lu="team" data-t="${i}" style="--team:${safeColor(t.color, COLORS[i])}"><i></i><span class="seg-name">${esc(t.name)}</span></button>`).join('')}</div>
       </div>
       <p class="muted lu-help" ${help ? '' : 'hidden'}>${batting ? 'Wrong child at the plate? Tap <b>Bat now</b> on who is really batting. ' : ''}Drag ${ICON.grip} to change the order; it applies from the next batter.</p>
       <ol class="lu-list" id="lu-order">${d.order.map(row).join('')}</ol>
