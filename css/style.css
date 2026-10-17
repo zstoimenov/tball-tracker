@@ -1181,5 +1181,6 @@ body[data-view="score"] .toast { top: var(--toast-top, calc(env(safe-area-inset-
   .score-screen.phase-confirm .opt { min-height: 26px; font-size: 11.5px; }
   .score-screen > .confirm-bar .confirm-row button.btn { min-height: 38px; font-size: 14.5px; }
 }
-.next-rules { display: grid; gap: 10px; margin: 0 0 14px; }
-.next-rules > small { font-size: 13px; }
+.keep-going { flex-direction: column; gap: 2px; margin-bottom: 10px; padding: 8px 14px; }
+.keep-going small { font-size: 12.5px; font-weight: 600; opacity: .85; }
+.sb-off { margin-left: 5px; padding: 1px 6px; border-radius: 6px; background: #c6f432; color: #10202b; font-style: normal; font-size: 10.5px; font-weight: 800; white-space: nowrap; }

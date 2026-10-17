@@ -1333,8 +1333,8 @@ function hero(bt) {
       ${state.over ? '' : `
       <div class="sb-strip">
         <span class="sb-inn">Innings runs <b>${state.teams[bt].runs[currentInning(state)] || 0}</b>${plus ? `<em>+${plus}</em>` : ''}</span>
-        <span class="sb-outs">Outs <span class="out-dots">${dots}</span></span>
-        <span>Batted <b>${state.batters}</b>/${limit}</span>
+        <span class="sb-outs">Outs <span class="out-dots">${dots}</span>${game.maxOuts && !state.outsOn ? '<em class="sb-off">no limit</em>' : ''}</span>
+        <span>Batted <b>${state.batters}</b>/${limit}${game.maxBatters && !state.batsOn ? '<em class="sb-off">all bat</em>' : ''}</span>
         ${game.events.length === 0 ? `<button class="sb-swap-btn" data-action="swapInGame" title="Swap which team bats first">${ICON.swap}<span>Swap batting team</span></button>` : ''}
       </div>`}
     </section>`;
@@ -1545,13 +1545,12 @@ function panel(ph, bt) {
         <div class="panel-head"><small>${esc(reason)}</small><h2>Innings over</h2></div>
         <p>Check with the umpire before you move on. ${esc(game.teams[bt].name)} scored <b>${state.teams[bt].runs[currentInning(state)] || 0}</b> this innings.</p>
         ${inningsSummary(bt)}
-        ${lastHalf ? '' : nextRulesCard()}
+        ${keepGoingButton()}
         <button class="btn primary big" data-action="endHalf">${lastHalf ? 'Finish the game' : `${esc(game.teams[nt].name)} bat next`} ${ICON.chevron}</button>
         <div class="alt-row">
           <button class="btn ghost grow" data-action="undo">${ICON.undo} Undo last play</button>
           ${lastHalf ? `<button class="btn ghost grow" data-action="extraInnings">Play another innings</button>` : ''}
         </div>
-        ${keepGoingButton()}
       </section>`;
   }
   const [a, b] = game.teams;
@@ -1761,14 +1760,7 @@ function commitRunnerOut(at) {
 }
 ACTIONS.undo = () => { undo(); buzz(6); };
 ACTIONS.redo = () => { redo(); buzz(6); };
-ACTIONS.endHalf = () => {
-  if (tooSoon()) return;
-  const r = pendingRules();
-  const msg = ruleMsg(rulesNow(), r);
-  nextRules = null;
-  if (!msg || state.half + 1 >= game.innings * 2) return commit({ t: 'end' }, 'innings ended');
-  commitPlay([{ t: 'end' }, { t: 'rule', bats: r.bats, outs: r.outs }], `innings ended; ${msg}`);
-};
+ACTIONS.endHalf = () => { if (!tooSoon()) commit({ t: 'end' }, 'innings ended'); };
 // In-game rules: the out and batter limits can each be switched off (and
 // back on), and stay that way until changed. Each change is undoable.
 const ruleNames = () => ({ outs: `${game.maxOuts}-out limit`, bats: `${game.maxBatters}-batter limit` });
@@ -1783,40 +1775,21 @@ function setRules(to) {
   if (msg) commit({ t: 'rule', bats: to.bats, outs: to.outs }, msg);
 }
 
-// Innings over: switches for the next innings, saved with the end of this
-// one. They start at the current rules; changes are kept until Undo or a
-// new play.
-let nextRules = null;
-const pendingRules = () => (nextRules?.at === game.events.length ? nextRules : { at: game.events.length, ...rulesNow() });
-function nextRulesCard() {
-  const keys = ruleKeys();
-  if (!keys.length) return '';
-  const r = pendingRules();
-  const sub = { outs: (on) => (on ? `${game.maxOuts} outs end the innings` : 'Outs are marked but don\'t end the innings'),
-    bats: (on) => (on ? `${game.maxBatters} batters end the innings` : 'The whole lineup bats') };
-  return `<div class="card next-rules"><small class="muted">Next innings rules (kept until you change them)</small>${keys.map((k) => `
-    <label class="toggle setting"><input type="checkbox" data-action="nextRule" data-k="${k}" ${r[k] ? 'checked' : ''}><span></span>
-      <div><b>${ruleNames()[k]}</b><small data-sub="${k}">${sub[k](r[k])}</small></div></label>`).join('')}</div>`;
-}
-ACTIONS.nextRule = (el) => {
-  nextRules = { ...pendingRules(), [el.dataset.k]: el.checked };
-  renderScore();
-};
-
 // Innings over mid-lineup: switch off the limit(s) that stopped it so the
 // rest of the lineup bats. Asks first before outs stop counting.
 function keepGoingButton() {
   const k = keepGoing(game, state);
   if (!k) return '';
-  const label = k.outs && k.bats ? 'no out or batter limit' : k.outs ? 'no out limit' : 'everyone bats';
-  return `<button class="btn ghost wide" data-action="keepGoing">Keep going this innings - ${label}</button>`;
+  const n = ruleNames();
+  const what = k.outs && k.bats ? `the ${n.outs} and ${n.bats}s` : `the ${k.outs ? n.outs : n.bats}`;
+  return `<button class="btn safe big keep-going" data-action="keepGoing"><span>Keep going</span><small>Turn off ${what} for the rest of the game</small></button>`;
 }
 ACTIONS.keepGoing = async () => {
   if (tooSoon()) return;
   const k = keepGoing(game, state);
   if (!k) return;
   if (k.outs && !await confirmSheet('Turn off the out limit?',
-    'Outs no longer end the innings until you turn it back on (Game options, or after any innings). Outs are still marked on the sheet.', 'Turn off')) return;
+    'This innings carries on, and outs won\'t end any innings for the rest of the game. Outs are still marked on the sheet. Turn it back on any time in Game options.', 'Keep going')) return;
   const to = rulesNow();
   if (k.outs) to.outs = false;
   if (k.bats) to.bats = false;
