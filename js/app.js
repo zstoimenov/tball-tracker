@@ -1,6 +1,6 @@
 import {
   newGame, replay, battingTeam, currentInning, halfDone, canBat, canRun,
-  pathClear, batterLimit, total, forcedMoves, keepGoing, outLimit, playerNum,
+  pathClear, batterLimit, total, forcedMoves, keepGoing, outLimit, playerNum, sheetRows,
 } from './model.js';
 import { renderGrid, renderSheet, drawCell } from './draw.js';
 import { ICON, esc, sheet, confirmSheet, toast, buzz, viewer } from './ui.js';
@@ -680,6 +680,9 @@ ACTIONS.editGame = () => {
     teams: game.teams.map((t, i) => ({ name: t.name, color: safeColor(t.color, COLORS[i]), players: [...t.players] })),
     locked: game.teams.map((t) => (game.events.length ? t.players.length : 0)),
     full: game.teams.map(() => game.events.length > 0),
+    // Once started, players are listed and numbered in batting order, as
+    // everywhere else in the game.
+    rows: game.events.length ? game.teams.map((_, i) => sheetRows(replay(game), i)) : null,
   };
   draft.preset = presetOf(draft);
   go('setup');
@@ -732,6 +735,15 @@ function setupTeams() {
     </div>`;
 }
 
+// Player indices in the order to list them: batting order once the game
+// has started, else as entered (which is the batting order before play).
+function listOrder(i) {
+  const n = draft.teams[i].players.length;
+  const rows = (draft.rows?.[i] || []).filter((k) => k < n);
+  for (let k = 0; k < n; k++) if (!rows.includes(k)) rows.push(k);
+  return rows;
+}
+
 function setupPlayers() {
   const i = draft.tab;
   const t = draft.teams[i];
@@ -755,14 +767,14 @@ function setupPlayers() {
     </div>`}
     ${t.players.length > 1 ? `<p class="hint-line">${locked ? 'Players who have already batted keep their spot. ' : ''}Drag ${ICON.grip} to change the batting order.</p>` : ''}
     <ol class="players" id="players">
-      ${t.players.map((p, k) => `
+      ${listOrder(i).map((k, pos) => [t.players[k], k, pos + 1]).map(([p, k, no]) => `
         <li data-k="${k}" class="${k < locked ? 'locked' : ''}">
-          <span class="num">${k + 1}</span>
+          <span class="num">${no}</span>
           ${inSquad(p) ? `<button class="btn small out not-here" data-action="notHere" data-k="${k}">Not here</button>` : ''}
-          <input class="input bare" data-bind="player:${i}:${k}" value="${esc(p)}" placeholder="#${k + 1}" aria-label="Player ${k + 1} name" enterkeyhint="${k < t.players.length - 1 ? 'next' : 'done'}" maxlength="24">
+          <input class="input bare" data-bind="player:${i}:${k}" value="${esc(p)}" placeholder="#${no}" aria-label="Player ${no} name" enterkeyhint="${no < t.players.length ? 'next' : 'done'}" maxlength="24">
           ${inSquad(p) ? '' : `<button class="icon-btn sm" data-action="removePlayer" data-k="${k}" ${k < locked ? 'disabled' : ''} aria-label="Remove">${ICON.x}</button>`}
           ${k < locked ? `<span class="grip off" aria-hidden="true">${ICON.lock}</span>`
-            : `<span class="grip" data-grip="${k}" role="button" tabindex="0" aria-label="Drag, or use arrow keys, to move ${esc(p || `player ${k + 1}`)}">${ICON.grip}</span>`}
+            : `<span class="grip" data-grip="${k}" role="button" tabindex="0" aria-label="Drag, or use arrow keys, to move ${esc(p || `player ${no}`)}">${ICON.grip}</span>`}
         </li>`).join('')}
     </ol>
     ${out.length ? `<h4 class="lu-h">Not here today</h4><ul class="lu-list">${out.map((n, k) => `
