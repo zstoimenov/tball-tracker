@@ -1586,12 +1586,16 @@ function inningsSummary(bt) {
   const cells = Object.entries(state.teams[bt].cells)
     .filter(([k]) => +k.split(':')[0] === inning)
     .map(([k, c]) => ({ p: +k.split(':')[1], ...c }));
-  const scored = cells.filter((c) => c.scored).sort((a, b) => a.p - b.p).map((c) => esc(shortName(bt, c.p)));
-  const outs = cells.filter((c) => c.out).sort((a, b) => a.out - b.out).map((c) => esc(shortName(bt, c.p)));
+  // Each player as their batting number badge plus first name (just the
+  // badge for unnamed players), so it reads like the sheet.
+  const color = safeColor(game.teams[bt].color, COLORS[bt]);
+  const who = (c) => `<span class="sum-p"><span class="num-badge" style="--team:${color}">${num(bt, c.p)}</span>${game.teams[bt].players[c.p] ? esc(shortName(bt, c.p)) : ''}</span>`;
+  const scored = cells.filter((c) => c.scored).sort((a, b) => num(bt, a.p) - num(bt, b.p)).map(who);
+  const outs = cells.filter((c) => c.out).sort((a, b) => a.out - b.out).map(who);
   return `
     <dl class="inn-sum">
-      <dt>Scored (${scored.length})</dt><dd>${scored.join(', ') || 'Nobody'}</dd>
-      <dt>Out (${outs.length})</dt><dd>${outs.join(', ') || 'Nobody'}</dd>
+      <dt>Scored (${scored.length})</dt><dd>${scored.join('') || 'Nobody'}</dd>
+      <dt>Out (${outs.length})</dt><dd>${outs.join('') || 'Nobody'}</dd>
     </dl>`;
 }
 

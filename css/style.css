@@ -598,7 +598,10 @@ div.field svg { position: absolute; inset: 0; width: 100%; height: 100%; filter:
 
 .inn-sum { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 0 0 14px; padding: 12px 14px; border-radius: 14px; background: var(--surface-2); border: 1px solid var(--line); font-size: 14px; }
 .inn-sum dt { font-weight: 800; color: var(--muted); }
-.inn-sum dd { margin: 0; font-weight: 700; }
+.inn-sum dd { margin: 0; font-weight: 700; display: flex; flex-wrap: wrap; gap: 6px 12px; }
+.inn-sum dt { align-self: center; }
+.sum-p { display: inline-flex; align-items: center; gap: 5px; }
+.score-screen .inn-sum .num-badge, .inn-sum .num-badge { width: 24px; height: 24px; border-radius: 7px; font-size: 12.5px; }
 .alt-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .alt-row .btn { min-height: 44px; font-size: 14px; padding: 8px 10px; }
 .alt-row .btn svg { width: 18px; height: 18px; }
