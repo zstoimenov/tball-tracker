@@ -13,8 +13,10 @@
 //   {t:'order', team, order, next}  batting order changed mid-game (late
 //                               arrival, player left, new order). `order` is
 //                               player indices; past plays are untouched.
-//   {t:'allbat'}                rest of the lineup bats this half (lifts the
-//                               batter limit until the half ends)
+//   {t:'rule', allBat, noOuts}  in-game rule change for the rest of the game:
+//                               allBat lifts the batter limit (whole lineup
+//                               bats), noOuts also lifts the out limit
+//   {t:'allbat'}                older builds: whole lineup bats this half only
 //   {t:'end'}                   end of the half innings
 //   {t:'over'}                  game ended early
 
@@ -52,7 +54,7 @@ export function newGame(opts) {
 // lineup so a batter cannot need two boxes in one innings column.
 export function batterLimit(game, team, s) {
   const n = s ? s.teams[team].order.length : game.teams[team].players.length;
-  if (s?.allBat) return n;
+  if (s?.allBat || s?.halfAllBat) return n;
   return game.maxBatters > 0 ? Math.min(game.maxBatters, n) : n;
 }
 
@@ -75,7 +77,9 @@ export function replay(game) {
     half: 0,
     outs: 0,
     batters: 0,
-    allBat: false, // batter limit lifted for this half
+    allBat: false, // batter limit lifted for the rest of the game
+    noOuts: false, // out limit lifted too (only with allBat)
+    halfAllBat: false, // older builds: batter limit lifted for this half
     runners: [null, null, null, null], // index 1..3 -> player index
     over: false,
   };
@@ -177,15 +181,18 @@ function apply(game, s, ev) {
       if (idx + 1 > O.rowCount) O.rowCount = idx + 1;
     }
     if (ev.next != null) O.next = ev.next;
+  } else if (ev.t === 'rule') {
+    s.allBat = Boolean(ev.allBat);
+    s.noOuts = s.allBat && Boolean(ev.noOuts);
   } else if (ev.t === 'allbat') {
-    s.allBat = true;
+    s.halfAllBat = true;
   } else if (ev.t === 'end') {
     T.runs[inning] ||= 0;
     T.breaks.push({ inning, player: T.next });
     s.half++;
     s.outs = 0;
     s.batters = 0;
-    s.allBat = false;
+    s.halfAllBat = false;
     s.runners = [null, null, null, null];
     if (s.half >= game.innings * 2) s.over = true;
   } else if (ev.t === 'over') {
@@ -194,23 +201,28 @@ function apply(game, s, ev) {
   }
 }
 
+// Outs that end a half; 0 means no limit.
+export const outLimit = (game, s) => (s?.noOuts ? 0 : game.maxOuts);
+
 // Why the current half should end, or null.
 export function halfDone(game, s) {
-  if (game.maxOuts > 0 && s.outs >= game.maxOuts) return game.maxOuts + (game.maxOuts === 1 ? ' out' : ' outs');
+  const max = outLimit(game, s);
+  if (max > 0 && s.outs >= max) return max + (max === 1 ? ' out' : ' outs');
   if (s.batters >= batterLimit(game, battingTeam(s), s)) return s.batters + ' players have batted';
   return null;
 }
 
-// The half stopped on the batter limit with lineup still to bat, so the
-// rest of the team can be let in.
-export function canAllBat(game, s) {
-  if (s.over || s.allBat || (game.maxOuts > 0 && s.outs >= game.maxOuts)) return false;
-  const n = s.teams[battingTeam(s)].order.length;
-  return s.batters >= batterLimit(game, battingTeam(s), s) && s.batters < n;
+// How the half could carry on so the rest of the lineup bats: 'bat' lifts
+// the batter limit, 'outs' also lifts the out limit, null if neither helps.
+export function keepGoing(game, s) {
+  if (s.over || s.batters >= s.teams[battingTeam(s)].order.length) return null;
+  const max = outLimit(game, s);
+  if (max > 0 && s.outs >= max) return 'outs';
+  return s.batters >= batterLimit(game, battingTeam(s), s) ? 'bat' : null;
 }
 
 export const canBat = (game, s) => !s.over && !halfDone(game, s);
-export const canRun = (game, s) => !s.over && !(game.maxOuts > 0 && s.outs >= game.maxOuts);
+export const canRun = (game, s) => !s.over && !(outLimit(game, s) > 0 && s.outs >= outLimit(game, s));
 
 // A runner may advance to `to` only if every base on the way is empty.
 export function pathClear(s, from, to) {

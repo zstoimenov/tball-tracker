@@ -27,8 +27,10 @@ through the phone's share sheet.
   order from the next batter on. Saved as one undoable step; recorded plays keep
   their players, and nobody is called twice in an innings.
 - Innings over shows who scored and who was out, to check with the umpire.
-- When the batter limit (e.g. 9) ends an innings, "Keep going - everyone bats
-  this innings" lets the rest of the lineup bat. Outs still apply; undoable.
+- "Everyone bats" (Game options, or Keep going on Innings over) lifts the
+  batter limit for the rest of the game. With it on, "No out limit" also stops
+  outs ending the innings; outs are still marked. Either can be switched off
+  at any time, and each change is undoable.
 - "Play another innings" at the end, so the length needn't be fixed up front.
 - Three tabs: Score, Sheet (the paper sheet, fitted to the phone width) and Share.
 - "Innings over, tell the umpire" prompts at the configured limit.
