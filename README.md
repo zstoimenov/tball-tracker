@@ -29,6 +29,9 @@ through the phone's share sheet.
 - The batting order used in the 1st innings is kept for the rest of the game:
   Lineup no longer reorders after that. Late arrivals bat at the end and a
   player back in returns to their spot.
+- Player numbers follow the batting order: they update with each Lineup save
+  in the 1st innings, then stay fixed (late arrivals get the next number).
+  The scoresheet rows are drawn in the same order.
 - Innings over shows who scored and who was out, to check with the umpire.
 - When 3 outs or the batter limit stops an innings with lineup still to bat,
   "Keep going" carries on and turns that limit off for the rest of the game

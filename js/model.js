@@ -89,6 +89,18 @@ export function replay(game) {
   return s;
 }
 
+// Sheet rows in batting order: the order kept from the 1st innings (or the
+// current one until then), then anyone not in it. A player's number is
+// their place here, so numbers follow the order and stay put once it's kept.
+export function sheetRows(s, team) {
+  const T = s.teams[team];
+  const base = (T.order1 || T.order).filter((p) => p < T.rowCount);
+  const rest = [];
+  for (let p = 0; p < T.rowCount; p++) if (!base.includes(p)) rest.push(p);
+  return [...base, ...rest];
+}
+export const playerNum = (s, team, p) => sheetRows(s, team).indexOf(p) + 1 || p + 1;
+
 export const battingTeam = (s) => s.half % 2;
 export const currentInning = (s) => Math.floor(s.half / 2);
 

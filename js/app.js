@@ -1,6 +1,6 @@
 import {
   newGame, replay, battingTeam, currentInning, halfDone, canBat, canRun,
-  pathClear, batterLimit, total, forcedMoves, keepGoing, outLimit,
+  pathClear, batterLimit, total, forcedMoves, keepGoing, outLimit, playerNum,
 } from './model.js';
 import { renderGrid, renderSheet, drawCell } from './draw.js';
 import { ICON, esc, sheet, confirmSheet, toast, buzz, viewer } from './ui.js';
@@ -1067,7 +1067,9 @@ const strikeoutsOn = () => game.strikeouts !== false;
 const lastEvent = () => game.events[game.events.length - 1];
 const anyRunners = () => state.runners.some((r) => r != null);
 // Players without a name go by their batting number.
-const playerName = (team, p) => game.teams[team].players[p] || `Batter #${p + 1}`;
+// Numbers follow the batting order (see sheetRows), not the player index.
+const num = (team, p) => playerNum(state, team, p);
+const playerName = (team, p) => game.teams[team].players[p] || `Batter #${num(team, p)}`;
 // Who is batting now: the next in order unless another player was picked.
 // Nobody bats twice in one innings column or while on base, so after a
 // lineup change the next in order may be skipped to the first who can bat.
@@ -1090,7 +1092,7 @@ const batEvent = (r) => {
   return p !== state.teams[bt].next ? { t: 'bat', r, p } : { t: 'bat', r };
 };
 const tooSoon = () => Date.now() - lastCommit < 450;
-const shortName = (team, p) => game.teams[team].players[p]?.split(' ')[0] || `#${p + 1}`;
+const shortName = (team, p) => game.teams[team].players[p]?.split(' ')[0] || `#${num(team, p)}`;
 
 // Phase is derived from the log so undo always lands in the right place.
 function phase() {
@@ -1393,11 +1395,11 @@ function diamond(bt, ph) {
     const p = state.runners[b];
     if (p == null) continue;
     chips.push(`<button class="chip ${game.teams[bt].players[p] ? '' : 'num-only'} ${selected === p ? 'sel' : ''} ${p === moved ? 'pop' : ''}" style="left:${POS[b][0]}%;top:${POS[b][1]}%;--team:${color}"
-      data-action="pick" data-p="${p}" ${runOk ? '' : 'disabled'}><span>${p + 1}</span>${game.teams[bt].players[p] ? `<em>${esc(shortName(bt, p))}</em>` : ''}</button>`);
+      data-action="pick" data-p="${p}" ${runOk ? '' : 'disabled'}><span>${num(bt, p)}</span>${game.teams[bt].players[p] ? `<em>${esc(shortName(bt, p))}</em>` : ''}</button>`);
   }
   if (ph === 'bat') {
     const p = batterUp(bt);
-    chips.push(`<div class="chip batter ${game.teams[bt].players[p] ? '' : 'num-only'}" style="left:${POS[0][0]}%;top:${POS[0][1]}%;--team:${color}"><span>${p + 1}</span>${game.teams[bt].players[p] ? `<em>${esc(shortName(bt, p))}</em>` : ''}</div>`);
+    chips.push(`<div class="chip batter ${game.teams[bt].players[p] ? '' : 'num-only'}" style="left:${POS[0][0]}%;top:${POS[0][1]}%;--team:${color}"><span>${num(bt, p)}</span>${game.teams[bt].players[p] ? `<em>${esc(shortName(bt, p))}</em>` : ''}</div>`);
   }
   const base = (b, x, y) => `<g class="base ${targets.has(b) ? 'target' : ''}" ${targets.has(b) ? `data-action="moveTo" data-to="${b || 4}"` : ''}>
       <circle cx="${x}" cy="${y}" r="26" class="hit"/>
@@ -1449,7 +1451,7 @@ function previewDiamond(bt) {
   const outs = [];
   for (const w of pending.rows) {
     const named = game.teams[bt].players[w.p];
-    const label = `<span>${w.p + 1}</span>${named ? `<em>${esc(shortName(bt, w.p))}</em>` : ''}`;
+    const label = `<span>${num(bt, w.p)}</span>${named ? `<em>${esc(shortName(bt, w.p))}</em>` : ''}`;
     if (w.dest === OUT) { outs.push(esc(shortName(bt, w.p))); continue; }
     if (w.dest != null && w.dest > w.from) {
       const pts = SVG_BASE.slice(w.from, w.dest + 1).map((q) => q.join(' '));
@@ -1487,7 +1489,7 @@ function panel(ph, bt) {
     const tc = safeColor(game.teams[bt].color, COLORS[bt]);
     return `
       <section class="panel">
-        <div class="batter-row"><span class="num-badge" style="--team:${tc}">${p + 1}</span>
+        <div class="batter-row"><span class="num-badge" style="--team:${tc}">${num(bt, p)}</span>
           <div><small>Up to bat · ${esc(game.teams[bt].name)}${upNext != null ? ' (out of order)' : ''}</small><h2>${esc(playerName(bt, p))}</h2></div>
           <button class="btn small ghost lineup-btn" data-action="lineup" aria-label="Lineup and who is batting">${ICON.sheet}<span>Lineup</span></button>
         </div>
@@ -1513,7 +1515,7 @@ function panel(ph, bt) {
       const note = w.batter ? 'Batter' : `Was on ${BASE[w.from]}${w.floor > w.from ? ' · forced ahead' : ''}`;
       return `
         <div class="move ${unplaced(w) ? 'ask' : ''}">
-          <div class="move-who"><span class="num-badge sm" style="--team:${color}">${w.p + 1}</span>
+          <div class="move-who"><span class="num-badge sm" style="--team:${color}">${num(bt, w.p)}</span>
             <b>${esc(playerName(bt, w.p))}</b><small>${note}</small></div>
           <div class="opts">${opts.map(([to, l]) => `<button class="opt ${to === OUT ? 'out' : to === 4 ? 'home' : ''} ${w.dest === to ? 'on' : ''}" data-action="dest" data-i="${i}" data-to="${to}" aria-pressed="${w.dest === to}">${l}</button>`).join('')}</div>
           ${w.dest === OUT && outBases(w).length > 1 ? `
@@ -1857,6 +1859,11 @@ ACTIONS.lineup = async () => {
     const batting = team === bt;
     // After the 1st innings the batting order is kept; only who is in changes.
     const order1 = state.teams[team].order1;
+    // Numbers as they will be once saved: the batting order (kept order
+    // after the 1st innings), then players not in it.
+    const base = order1 || d.order;
+    const seq = [...base, ...d.names.map((_, p) => p).filter((p) => !base.includes(p))];
+    const no = (p) => seq.indexOf(p) + 1;
     const free = batting ? d.order.filter(canBat) : [];
     if (batting && !free.includes(atBat)) atBat = free.includes(nextAfterChange(team, d.order)) ? nextAfterChange(team, d.order) : free[0] ?? null;
     const next = batting ? atBat : d.order.length ? nextAfterChange(team, d.order) : null;
@@ -1873,12 +1880,12 @@ ACTIONS.lineup = async () => {
     const gone = d.names.map((_, p) => p).filter((p) => !d.order.includes(p));
     const row = (p, k) => `
       <li class="lu-row ${p === next ? 'next' : ''}">
-        <span class="num-badge sm" style="--team:${color}">${p + 1}</span>
+        <span class="num-badge sm" style="--team:${color}">${no(p)}</span>
         <button class="btn small out" data-lu="left" data-k="${k}">Left</button>
-        <input class="input bare" data-lu-name="${p}" value="${esc(d.names[p])}" placeholder="#${p + 1}" maxlength="24" enterkeyhint="${k < d.order.length - 1 ? 'next' : 'done'}" aria-label="Player ${p + 1} name">
+        <input class="input bare" data-lu-name="${p}" value="${esc(d.names[p])}" placeholder="#${no(p)}" maxlength="24" enterkeyhint="${k < d.order.length - 1 ? 'next' : 'done'}" aria-label="Player ${no(p)} name">
         ${batCell(p)}
         ${order1 ? `<span class="grip off" aria-hidden="true">${ICON.lock}</span>`
-          : `<span class="grip" data-grip="${k}" role="button" tabindex="0" aria-label="Drag, or use arrow keys, to move ${esc(d.names[p] || `player ${p + 1}`)}">${ICON.grip}</span>`}
+          : `<span class="grip" data-grip="${k}" role="button" tabindex="0" aria-label="Drag, or use arrow keys, to move ${esc(d.names[p] || `player ${no(p)}`)}">${ICON.grip}</span>`}
       </li>`;
     el.querySelector('.bsheet-body').innerHTML = `
       <div class="lu-top">
@@ -1891,7 +1898,7 @@ ACTIONS.lineup = async () => {
         <button class="btn primary" data-lu="add">${ICON.plus}<span class="sr">Add</span></button></div>
       ${picks.length ? `<div class="lu-picks"><span>From your squad</span>${picks.map((n, i) => `<button class="btn small ghost" data-lu="pick" data-n="${i}">${ICON.plus}${esc(n)}</button>`).join('')}</div>` : ''}
       ${gone.length ? `<h4 class="lu-h">Left the game</h4><ul class="lu-list">${gone.map((p) => `
-        <li class="lu-row gone"><span class="num-badge sm" style="--team:${color}">${p + 1}</span><span class="lu-name">${esc(d.names[p] || `#${p + 1}`)}</span>
+        <li class="lu-row gone"><span class="num-badge sm" style="--team:${color}">${no(p)}</span><span class="lu-name">${esc(d.names[p] || `#${no(p)}`)}</span>
           <button class="btn small ghost" data-lu="back" data-p="${p}">Back in</button></li>`).join('')}</ul>` : ''}`;
     if (!order1) makeSortable(el.querySelector('#lu-order'), 0, (from, to) => {
       const o = drafts[team].order;

@@ -1,7 +1,7 @@
 // Canvas renderer for the paper-style scoresheet. Used for the live grid and
 // for the exported PNG, so both always match.
 
-import { total } from './model.js';
+import { total, sheetRows } from './model.js';
 
 const INK = '#111';
 const GRID = '#222';
@@ -220,9 +220,11 @@ export function drawGrid(ctx, x, y, game, state, team, hi, lay = L) {
     ctx.fillText(String(i + 1), gx + i * S + S / 2, top + lay.head * 1.5);
   }
 
-  // Batter rows
-  for (let p = 0; p < n; p++) {
-    const ry = rowsTop + p * S;
+  // Batter rows, in batting order (numbers follow it)
+  const rows = sheetRows(state, team);
+  for (let k = 0; k < rows.length; k++) {
+    const p = rows[k];
+    const ry = rowsTop + k * S;
     ctx.strokeStyle = GRID;
     ctx.lineWidth = 1;
     ctx.strokeRect(x, ry, lay.num, S);
@@ -230,7 +232,7 @@ export function drawGrid(ctx, x, y, game, state, team, hi, lay = L) {
     ctx.fillStyle = INK;
     ctx.font = `13px ${FONT}`;
     ctx.textAlign = 'center';
-    ctx.fillText(String(p + 1), x + lay.num / 2, ry + S / 2);
+    ctx.fillText(String(k + 1), x + lay.num / 2, ry + S / 2);
     ctx.textAlign = 'left';
     const pName = formatSheetPlayer(T.players[p] || '', privacy);
     ctx.fillText(fitText(ctx, pName, lay.name - 10), x + lay.num + 6, ry + S / 2);
@@ -254,9 +256,10 @@ export function drawGrid(ctx, x, y, game, state, team, hi, lay = L) {
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
   for (const b of TS.breaks) {
-    if (b.inning >= game.innings || b.player >= n) continue;
+    const row = rows.indexOf(b.player);
+    if (b.inning >= game.innings || row < 0) continue;
     const bx = gx + b.inning * S;
-    const by = rowsTop + b.player * S;
+    const by = rowsTop + row * S;
     const end = b.inning + 1 < game.innings ? bx + 2 * S : bx + S + 12;
     ctx.beginPath();
     if (!TS.cells[b.inning + ':' + b.player]) {
