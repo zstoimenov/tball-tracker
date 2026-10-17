@@ -1125,8 +1125,9 @@ function commit(ev, msg) {
 function commitPlay(evs, msg) {
   redoStack = [];
   const g = evs.length > 1 ? 'p' + Date.now().toString(36) : null;
+  const m = msg && msgRefs(msg);
   for (const ev of evs) {
-    if (msg) ev.m = msg;
+    if (msg) ev.m = m;
     if (g) ev.g = g;
     game.events.push(ev);
   }
@@ -1142,11 +1143,32 @@ function commitPlay(evs, msg) {
   if (msg) toast(`Recorded: ${msg}`, { label: 'Undo', run: () => { undo(); buzz(6); } }, 'rec');
 }
 
+// Unnamed players appear in play messages by batting number, which can
+// change (1st innings reorder) after the play is saved. So "#6" is stored
+// as a reference to the player, #{team:index}, and shown with their number
+// (or name, if given since) when displayed.
+function msgRefs(msg) {
+  const team = battingTeam(state);
+  const rows = sheetRows(state, team);
+  return msg.replace(/#(\d+)\b/g, (s, n) => {
+    const p = rows[n - 1];
+    return p != null && !game.teams[team].players[p] ? `#{${team}:${p}}` : s;
+  });
+}
+const refName = (team, p) => game.teams[team]?.players[p]?.split(' ')[0] || `#${num(team, p)}`;
+function showMsg(ev) {
+  if (/#\{\d+:\d+\}/.test(ev.m)) return ev.m.replace(/#\{(\d+):(\d+)\}/g, (_, t, p) => refName(+t, +p));
+  // Saved before references: a one-player play's "#n" was that player.
+  const bt = battingTeam(state);
+  const p = ev.t === 'bat' ? state.teams[bt].last : ev.t === 'adv' || ev.t === 'rout' ? ev.p : null;
+  return p != null && !ev.g ? ev.m.replace(/#\d+\b/, refName(bt, p)) : ev.m;
+}
+
 function lastPlay() {
   const ev = lastEvent();
   if (!ev) return 'Tap a play to begin';
   const generic = { bat: 'batter recorded', adv: 'runner moved', rout: 'runner out', order: 'lineup updated', end: 'innings ended', over: 'game ended' };
-  return `Last: ${esc(ev.m || generic[ev.t] || 'play')}`;
+  return `Last: ${esc((ev.m && showMsg(ev)) || generic[ev.t] || 'play')}`;
 }
 
 const tabBar = (active) => `
