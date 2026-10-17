@@ -13,6 +13,8 @@
 //   {t:'order', team, order, next}  batting order changed mid-game (late
 //                               arrival, player left, new order). `order` is
 //                               player indices; past plays are untouched.
+//   {t:'allbat'}                rest of the lineup bats this half (lifts the
+//                               batter limit until the half ends)
 //   {t:'end'}                   end of the half innings
 //   {t:'over'}                  game ended early
 
@@ -50,6 +52,7 @@ export function newGame(opts) {
 // lineup so a batter cannot need two boxes in one innings column.
 export function batterLimit(game, team, s) {
   const n = s ? s.teams[team].order.length : game.teams[team].players.length;
+  if (s?.allBat) return n;
   return game.maxBatters > 0 ? Math.min(game.maxBatters, n) : n;
 }
 
@@ -72,6 +75,7 @@ export function replay(game) {
     half: 0,
     outs: 0,
     batters: 0,
+    allBat: false, // batter limit lifted for this half
     runners: [null, null, null, null], // index 1..3 -> player index
     over: false,
   };
@@ -173,12 +177,15 @@ function apply(game, s, ev) {
       if (idx + 1 > O.rowCount) O.rowCount = idx + 1;
     }
     if (ev.next != null) O.next = ev.next;
+  } else if (ev.t === 'allbat') {
+    s.allBat = true;
   } else if (ev.t === 'end') {
     T.runs[inning] ||= 0;
     T.breaks.push({ inning, player: T.next });
     s.half++;
     s.outs = 0;
     s.batters = 0;
+    s.allBat = false;
     s.runners = [null, null, null, null];
     if (s.half >= game.innings * 2) s.over = true;
   } else if (ev.t === 'over') {
@@ -192,6 +199,14 @@ export function halfDone(game, s) {
   if (game.maxOuts > 0 && s.outs >= game.maxOuts) return game.maxOuts + (game.maxOuts === 1 ? ' out' : ' outs');
   if (s.batters >= batterLimit(game, battingTeam(s), s)) return s.batters + ' players have batted';
   return null;
+}
+
+// The half stopped on the batter limit with lineup still to bat, so the
+// rest of the team can be let in.
+export function canAllBat(game, s) {
+  if (s.over || s.allBat || (game.maxOuts > 0 && s.outs >= game.maxOuts)) return false;
+  const n = s.teams[battingTeam(s)].order.length;
+  return s.batters >= batterLimit(game, battingTeam(s), s) && s.batters < n;
 }
 
 export const canBat = (game, s) => !s.over && !halfDone(game, s);

@@ -1,6 +1,6 @@
 import {
   newGame, replay, battingTeam, currentInning, halfDone, canBat, canRun,
-  pathClear, batterLimit, total, forcedMoves,
+  pathClear, batterLimit, total, forcedMoves, canAllBat,
 } from './model.js';
 import { renderGrid, renderSheet, drawCell } from './draw.js';
 import { ICON, esc, sheet, confirmSheet, toast, buzz, viewer } from './ui.js';
@@ -1543,6 +1543,7 @@ function panel(ph, bt) {
         <p>Check with the umpire before you move on. ${esc(game.teams[bt].name)} scored <b>${state.teams[bt].runs[currentInning(state)] || 0}</b> this innings.</p>
         ${inningsSummary(bt)}
         <button class="btn primary big" data-action="endHalf">${lastHalf ? 'Finish the game' : `${esc(game.teams[nt].name)} bat next`} ${ICON.chevron}</button>
+        ${canAllBat(game, state) ? `<button class="btn ghost wide" data-action="allBat">Keep going - everyone bats this innings</button>` : ''}
         <div class="alt-row">
           <button class="btn ghost grow" data-action="undo">${ICON.undo} Undo last play</button>
           ${lastHalf ? `<button class="btn ghost grow" data-action="extraInnings">Play another innings</button>` : ''}
@@ -1757,6 +1758,8 @@ function commitRunnerOut(at) {
 ACTIONS.undo = () => { undo(); buzz(6); };
 ACTIONS.redo = () => { redo(); buzz(6); };
 ACTIONS.endHalf = () => { if (!tooSoon()) commit({ t: 'end' }, 'innings ended'); };
+// Lift the batter limit for this half only; outs still end it.
+ACTIONS.allBat = () => { if (!tooSoon()) commit({ t: 'allbat' }, 'everyone bats this innings'); };
 // Extra innings: raise the planned count, then carry on as normal.
 ACTIONS.extraInnings = () => {
   if (tooSoon()) return;
