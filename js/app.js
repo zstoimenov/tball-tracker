@@ -1160,8 +1160,31 @@ function showMsg(ev) {
   if (/#\{\d+:\d+\}/.test(ev.m)) return ev.m.replace(/#\{(\d+):(\d+)\}/g, (_, t, p) => refName(+t, +p));
   // Saved before references: a one-player play's "#n" was that player.
   const bt = battingTeam(state);
+  if (ev.g) return legacyGroupMsg(ev);
   const p = ev.t === 'bat' ? state.teams[bt].last : ev.t === 'adv' || ev.t === 'rout' ? ev.p : null;
-  return p != null && !ev.g ? ev.m.replace(/#\d+\b/, refName(bt, p)) : ev.m;
+  return p != null ? ev.m.replace(/#\d+\b/, refName(bt, p)) : ev.m;
+}
+
+// An older multi-runner play. Its message lists the batter first, then each
+// runner who moved, from 1st base up (see playSummary); unnamed ones as
+// "#n". Rebuild that list from the game and swap each "#n" in turn.
+function legacyGroupMsg(ev) {
+  const i = game.events.findIndex((e) => e.g === ev.g);
+  const end = i + game.events.slice(i).filter((e) => e.g === ev.g).length;
+  const before = replay({ ...game, events: game.events.slice(0, i) });
+  const after = replay({ ...game, events: game.events.slice(0, end) });
+  const bt = battingTeam(before);
+  const bat = game.events.slice(i, end).find((e) => e.t === 'bat');
+  const seq = [bat ? bat.p ?? before.teams[bt].next : null];
+  for (let b = 1; b <= 3; b++) {
+    const p = before.runners[b];
+    if (p != null && after.runners[b] !== p) seq.push(p);
+  }
+  const unnamed = seq.filter((p) => p != null && !game.teams[bt].players[p]);
+  const ns = ev.m.match(/#\d+\b/g) || [];
+  if (ns.length !== unnamed.length) return ev.m;
+  let k = 0;
+  return ev.m.replace(/#\d+\b/g, () => refName(bt, unnamed[k++]));
 }
 
 function lastPlay() {
