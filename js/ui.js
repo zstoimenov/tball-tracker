@@ -88,7 +88,8 @@ export const confirmSheet = (title, text, ok, kind = 'primary') =>
   }).then(Boolean);
 
 let toastTimer;
-export function toast(msg, action, kind = '') {
+// extra: {html} shown under the message, {ms} how long it stays.
+export function toast(msg, action, kind = '', extra = {}) {
   let t = document.getElementById('toast');
   if (!t) {
     t = document.createElement('div');
@@ -97,12 +98,12 @@ export function toast(msg, action, kind = '') {
     t.setAttribute('role', 'status');
     document.body.appendChild(t);
   }
-  t.innerHTML = `<span>${esc(msg)}</span>${action ? `<button>${esc(action.label)}</button>` : ''}`;
+  t.innerHTML = `<span>${esc(msg)}</span>${action ? `<button>${esc(action.label)}</button>` : ''}${extra.html || ''}`;
   if (action) t.querySelector('button').onclick = () => { t.classList.remove('show'); action.run(); };
   t.className = `toast ${kind}`;
   t.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.classList.remove('show'), action ? 4500 : 2500);
+  toastTimer = setTimeout(() => t.classList.remove('show'), extra.ms || (action ? 4500 : 2500));
 }
 
 // Full-screen image viewer with pinch, double-tap, wheel and button zoom.

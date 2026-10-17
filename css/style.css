@@ -594,6 +594,15 @@ div.field svg { position: absolute; inset: 0; width: 100%; height: 100%; filter:
 .out-at { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 8px; padding: 6px; border-radius: 12px; background: var(--out-bg); border: 1px solid var(--out-border); }
 .out-at > span { flex: none; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: var(--out-ink); padding: 0 4px; }
 .out-at.ask { outline: 2px solid #f5a524; }
+/* Learn the symbols: the player's sheet box with the play's new marks */
+.learn-mark { flex: none; display: flex; align-items: center; gap: 6px; max-width: 46%; }
+.learn-mark small { font-size: 11px; font-weight: 700; color: #1d6fe0; text-align: right; line-height: 1.2; }
+.learn-mark canvas, .learn-item canvas { flex: none; width: 34px; height: 34px; border-radius: 3px; }
+.toast.learn { flex-wrap: wrap; }
+.toast .learn-list { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 6px 14px; padding-bottom: 2px; }
+.learn-item { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.learn-item b { display: block; font-size: 12.5px; }
+.learn-item small { display: block; font-size: 12px; color: #9cc4ff; font-weight: 700; }
 .confirm-bar .play-warning { margin: 0 auto; max-width: 608px; text-align: center; color: var(--warn-ink); background: var(--warn-bg); border: 1px solid var(--warn-border); border-radius: 10px; padding: 6px 10px; font-weight: 700; font-size: 13.5px; }
 
 .inn-sum { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 0 0 14px; padding: 12px 14px; border-radius: 14px; background: var(--surface-2); border: 1px solid var(--line); font-size: 14px; }

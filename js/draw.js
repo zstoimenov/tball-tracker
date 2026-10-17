@@ -42,7 +42,11 @@ export function formatSheetPlayer(raw, privacy = false) {
 // runner goes home -> 1st (right) -> 2nd (top) -> 3rd (left) -> home.
 const angle = (base) => Math.PI / 2 - base * (Math.PI / 2);
 
-export function drawCell(ctx, x, y, S, cell, hi) {
+// `prev` (learn mode): the cell before the latest play. Marks it already
+// had are drawn grey and the ones the play adds in `NEW`.
+export const NEW = '#1d6fe0';
+const OLD = '#a0a0a0';
+export function drawCell(ctx, x, y, S, cell, hi, prev = null) {
   const cx = x + S / 2;
   const cy = y + S / 2;
   const r = S * 0.3;
@@ -63,7 +67,9 @@ export function drawCell(ctx, x, y, S, cell, hi) {
   ctx.fillStyle = INK;
   ctx.lineWidth = 1.6;
 
-  for (const seg of cell?.segs || []) {
+  const ink = (fresh) => (prev ? (fresh ? NEW : OLD) : INK);
+  (cell?.segs || []).forEach((seg, i) => {
+    ctx.strokeStyle = ctx.fillStyle = ink(i >= (prev?.segs.length ?? 0));
     if (seg.to - seg.from === 1) {
       const a = angle(seg.to);
       ctx.beginPath();
@@ -88,18 +94,20 @@ export function drawCell(ctx, x, y, S, cell, hi) {
       ctx.closePath();
       ctx.fill();
     }
-  }
+  });
 
   // Centre circle: filled when the player scored, out number when out.
   ctx.beginPath();
   ctx.arc(cx, cy, cr, 0, Math.PI * 2);
-  ctx.fillStyle = cell?.scored ? INK : hi ? '#fff4b8' : '#fff';
+  ctx.fillStyle = cell?.scored ? ink(!prev?.scored) : hi ? '#fff4b8' : '#fff';
   ctx.fill();
   ctx.lineWidth = 1.2;
+  ctx.strokeStyle = cell?.scored ? ctx.fillStyle : prev ? OLD : INK;
   ctx.stroke();
 
+  const outInk = ink(!prev?.out);
   if (cell?.out) {
-    ctx.fillStyle = INK;
+    ctx.fillStyle = outInk;
     ctx.font = `bold ${Math.round(S * 0.17)}px ${FONT}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -107,6 +115,7 @@ export function drawCell(ctx, x, y, S, cell, hi) {
   }
   if (cell?.how === 'K') {
     // Three strike marks with a line through them.
+    ctx.strokeStyle = outInk;
     ctx.lineWidth = 1.3;
     ctx.beginPath();
     const bx = x + S * 0.62;

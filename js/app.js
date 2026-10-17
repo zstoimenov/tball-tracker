@@ -51,6 +51,7 @@ function save() {
   if (!db.saveAll(games) && !db.healthy()) toast('Could not save on this device. Back up your games.');
 }
 let tips = store.get('tball.tips', true);
+let learn = store.get('tball.learn', false); // show the sheet mark for each move
 let shortcuts = store.get('tball.shortcuts', true); // Game day guide / Sample game on home
 
 // Seed a realistic sample game on first run if no games exist yet so the user can test every screen immediately.
@@ -354,9 +355,11 @@ ACTIONS.homeMenu = async () => {
         <button class="menu-item" data-i="1">${ICON.upload}<span><b>Restore from backup</b><small>Adds games from a backup file; nothing is overwritten with older data</small></span></button>
         <button class="menu-item" data-i="3">${ICON.sparkle}<span><b>Sample game</b><small>Open a live 2nd-innings demo</small></span></button>
         <button class="menu-item" data-i="4">${ICON.bulb}<span><b>${shortcuts ? 'Hide' : 'Show'} home shortcuts</b><small>Game day guide and Sample game buttons</small></span></button>
+        ${learnItem(5)}
       </div>`,
-    actions: [{ value: 'backup' }, { value: 'restore' }, { value: 'presetTeam' }, { value: 'demo' }, { value: 'shortcuts' }],
+    actions: [{ value: 'backup' }, { value: 'restore' }, { value: 'presetTeam' }, { value: 'demo' }, { value: 'shortcuts' }, { value: 'learn' }],
   });
+  if (v === 'learn') toggleLearn();
   if (v === 'demo') ACTIONS.loadDemo();
   if (v === 'shortcuts') { shortcuts = !shortcuts; store.set('tball.shortcuts', shortcuts); renderHome(); }
   if (v === 'presetTeam') ACTIONS.presetTeam();
@@ -1123,6 +1126,7 @@ function commit(ev, msg) {
 // A play can be several events (batter plus runner moves). They share a
 // group id so Undo takes the whole play back in one tap.
 function commitPlay(evs, msg) {
+  const before = learn ? replay(game) : null;
   redoStack = [];
   const g = evs.length > 1 ? 'p' + Date.now().toString(36) : null;
   const m = msg && msgRefs(msg);
@@ -1140,7 +1144,11 @@ function commitPlay(evs, msg) {
   buzz();
   renderScore();
   // Say what was saved, right away, while the play is still fresh.
-  if (msg) toast(`Recorded: ${msg}`, { label: 'Undo', run: () => { undo(); buzz(6); } }, 'rec');
+  if (msg) {
+    const html = before ? learnList(before, state) : '';
+    toast(`Recorded: ${msg}`, { label: 'Undo', run: () => { undo(); buzz(6); } }, html ? 'rec learn' : 'rec', html ? { html, ms: 8000 } : {});
+    if (html) drawLearn(document.getElementById('toast'));
+  }
 }
 
 // Unnamed players appear in play messages by batting number, which can
@@ -1351,7 +1359,14 @@ function playSummary() {
 }
 
 function confirmPlay() {
-  const { r, rows } = pending;
+  commitPlay(pendingEvents(), playSummary());
+}
+
+// The play's events. `partial` (learn preview) leaves out runners not yet
+// placed, as if they stayed.
+function pendingEvents(partial = false) {
+  const { r } = pending;
+  const rows = partial ? pending.rows.filter((w) => !unplaced(w)) : pending.rows;
   // Runners put out are taken off their starting base before the hit is
   // applied, so the sheet never shows them reaching a base they were out at.
   const runnersOut = rows.filter((w) => !w.batter && w.dest === OUT);
@@ -1368,7 +1383,7 @@ function confirmPlay() {
   }
   // Lead runner first so nobody lands on a base that is still occupied.
   for (const w of [...rows].reverse()) if (w.dest !== OUT && w.dest > at.get(w.p)) evs.push({ t: 'adv', p: w.p, to: w.dest });
-  commitPlay(evs, playSummary());
+  return evs;
 }
 
 function hero(bt) {
@@ -1564,6 +1579,8 @@ function panel(ph, bt) {
   if (ph === 'confirm') {
     const color = safeColor(game.teams[bt].color, COLORS[bt]);
     const hasUnforced = pending.rows.some((w) => !w.batter && w.floor === w.from);
+    const preview = learn ? replay({ ...game, events: [...game.events, ...pendingEvents(true)] }) : null;
+    const key = (p) => `${currentInning(state)}:${p}`;
     const rows = pending.rows.map((w, i) => {
       const opts = [];
       if (w.floor === w.from) opts.push([w.from, 'Stayed']);
@@ -1574,6 +1591,7 @@ function panel(ph, bt) {
         <div class="move ${unplaced(w) ? 'ask' : ''}">
           <div class="move-who"><span class="num-badge sm" style="--team:${color}">${num(bt, w.p)}</span>
             <b>${esc(playerName(bt, w.p))}</b><small>${note}</small></div>
+            ${preview && !unplaced(w) ? learnMark(preview.teams[bt].cells[key(w.p)], state.teams[bt].cells[key(w.p)]) : ''}
           <div class="opts">${opts.map(([to, l]) => `<button class="opt ${to === OUT ? 'out' : to === 4 ? 'home' : ''} ${w.dest === to ? 'on' : ''}" data-action="dest" data-i="${i}" data-to="${to}" aria-pressed="${w.dest === to}">${l}</button>`).join('')}</div>
           ${w.dest === OUT && outBases(w).length > 1 ? `
           <div class="out-at ${w.outAt ? '' : 'ask'}"><span>Out at</span>${outBases(w).map((b) => `<button class="opt out ${w.outAt === b ? 'on' : ''}" data-action="outAt" data-i="${i}" data-b="${b}" aria-pressed="${w.outAt === b}">${b === 4 ? 'Home' : BASE[b]}</button>`).join('')}</div>` : ''}
@@ -1673,6 +1691,7 @@ function confirmBar() {
 }
 
 function renderScore() {
+  learnBoxes = [];
   state = replay(game);
   const bt = battingTeam(state);
   const ph = phase();
@@ -1693,6 +1712,7 @@ function renderScore() {
       </main>
       ${ph === 'confirm' ? confirmBar() : tabBar('score')}
     </div>`;
+  drawLearn(app);
   fitField();
 }
 
@@ -2198,6 +2218,7 @@ ACTIONS.menu = async () => {
     body: '<div class="menu-list">' +
       `<button class="menu-item" data-i="6">${ICON.shield}<span><b>Preset my team</b><small>${own ? `${esc(own)} · auto-fills opponent, colours &amp; venue` : 'Set your team on this device'}</small></span></button>` +
       `<button class="menu-item" data-i="4">${ICON.help}<span><b>Help</b><small>Game day guide, rules and symbols</small></span></button>` +
+      learnItem(9) +
       (state.over ? '' : `<button class="menu-item" data-i="5">${ICON.sheet}<span><b>Lineup</b><small>Who is batting, late arrival, player left, order</small></span></button>`) +
       `<button class="menu-item" data-i="0">${ICON.edit}<span><b>Edit game</b><small>Names, innings, rules</small></span></button>` +
       (state.over || !game.maxOuts ? '' : `<button class="menu-item" data-i="8">${ICON.whistle}<span><b>${ruleNames().outs}: ${state.outsOn ? 'On' : 'Off'}</b><small>Tap to turn ${state.outsOn ? 'off' : 'on'} now, until you change it</small></span></button>`) +
@@ -2205,8 +2226,9 @@ ACTIONS.menu = async () => {
       (state.over ? '' : `<button class="menu-item" data-i="1">${ICON.flag}<span><b>End innings now</b><small>Before the limit is reached</small></span></button>`) +
       (state.over ? '' : `<button class="menu-item" data-i="2">${ICON.whistle}<span><b>End game now</b><small>E.g. time ran out</small></span></button>`) +
       `<button class="menu-item danger" data-i="3">${ICON.trash}<span><b>Delete game</b></span></button></div>`,
-    actions: [{ value: 'edit' }, { value: 'endHalf' }, { value: 'over' }, { value: 'delete' }, { value: 'help' }, { value: 'lineup' }, { value: 'presetTeam' }, { value: 'allBat' }, { value: 'noOuts' }],
+    actions: [{ value: 'edit' }, { value: 'endHalf' }, { value: 'over' }, { value: 'delete' }, { value: 'help' }, { value: 'lineup' }, { value: 'presetTeam' }, { value: 'allBat' }, { value: 'noOuts' }, { value: 'learn' }],
   });
+  if (v === 'learn') toggleLearn();
   if (v === 'allBat') setRules({ ...rulesNow(), bats: !state.batsOn });
   if (v === 'noOuts') setRules({ ...rulesNow(), outs: !state.outsOn });
   if (v === 'presetTeam') ACTIONS.presetTeam();
@@ -2225,6 +2247,70 @@ ACTIONS.menu = async () => {
     go('home');
   }
 };
+
+// ---------- learn the symbols ----------
+// Optional layer while scoring: each move shows the player's sheet box with
+// the marks it adds in blue, so the paper sheet can be learned along the way.
+let learnBoxes = []; // {cell, prev} for each canvas[data-learn] on screen
+const EMPTY = { segs: [], scored: false, out: 0, how: null };
+const learnItem = (i) => `<button class="menu-item" data-i="${i}">${ICON.edit}<span><b>Learn the symbols: ${learn ? 'On' : 'Off'}</b><small>Show the sheet mark for each move while scoring</small></span></button>`;
+function toggleLearn() {
+  learn = !learn;
+  store.set('tball.learn', learn);
+  toast(learn ? 'Learn the symbols on: new marks show in blue' : 'Learn the symbols off');
+  if (current === 'score') renderScore();
+}
+
+// What to draw for the marks added to a box, in words.
+function markText(cell, prev = EMPTY) {
+  const at = (b) => (b === 0 || b === 4 ? 'home' : BASE[b]);
+  const parts = [];
+  const dots = [];
+  for (const seg of cell.segs.slice(prev.segs.length)) {
+    if (seg.to - seg.from === 1) dots.push(at(seg.to));
+    else parts.push(`arc ${at(seg.from)} to ${at(seg.to)}`);
+  }
+  if (dots.length) parts.unshift(`dot${dots.length > 1 ? 's' : ''} at ${dots.join(', ')}`);
+  if (cell.scored && !prev.scored) parts.push('fill centre (run)');
+  if (cell.out && !prev.out) parts.push(`${cell.out} in centre (out)${cell.how === 'K' ? ', strike marks' : ''}`);
+  const text = parts.join(' + ') || 'no new mark';
+  return text[0].toUpperCase() + text.slice(1);
+}
+
+const learnCanvas = (cell, prev) => `<canvas data-learn="${learnBoxes.push({ cell, prev: prev || EMPTY }) - 1}" width="112" height="112" aria-hidden="true"></canvas>`;
+function learnMark(cell, prev) {
+  if (!cell) return '';
+  return `<div class="learn-mark"><small>${esc(markText(cell, prev))}</small>${learnCanvas(cell, prev)}</div>`;
+}
+
+// Every box a saved play changed, for the Recorded banner.
+function learnList(before, after) {
+  const items = [];
+  after.teams.forEach((T, team) => {
+    for (const [k, cell] of Object.entries(T.cells)) {
+      const prev = before.teams[team].cells[k];
+      if (prev && prev.segs.length === cell.segs.length && prev.scored === cell.scored && prev.out === cell.out) continue;
+      const p = +k.split(':')[1];
+      items.push(`<div class="learn-item">${learnCanvas(cell, prev)}<div><b>#${num(team, p)} ${esc(game.teams[team].players[p] ? shortName(team, p) : '')}</b><small>${esc(markText(cell, prev))}</small></div></div>`);
+    }
+  });
+  return items.length ? `<div class="learn-list">${items.join('')}</div>` : '';
+}
+
+function drawLearn(root) {
+  root?.querySelectorAll('canvas[data-learn]').forEach((c) => {
+    const box = learnBoxes[+c.dataset.learn];
+    if (!box) return;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, 112, 112);
+    ctx.scale(2, 2);
+    drawCell(ctx, 0, 0, 56, box.cell, false, box.prev);
+    ctx.strokeStyle = '#222';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(0.5, 0.5, 55, 55);
+  });
+}
 
 // ---------- help ----------
 const LEGEND = [
@@ -2292,6 +2378,7 @@ ACTIONS.help = () =>
         </ul>
         <h4>Symbols on the sheet</h4>
         <div class="legend">${LEGEND.map((l, i) => `<div><canvas data-legend="${i}" width="112" height="112"></canvas><span>${l.text}</span></div>`).join('')}</div>
+        <p class="muted">Learning the sheet? Turn on <b>Learn the symbols</b> (⋯ menu): while you score, each move shows the player's box with the new marks in blue.</p>
         <p class="muted">A thick diagonal line marks who bats first in the next innings. The split box at the bottom shows the innings runs (top) and the running total (bottom).</p>
         <h4>Your data</h4>
         <p class="muted">Every tap is saved instantly on this phone, twice over. The app works with no signal${navigator.serviceWorker?.controller ? ' <b>(offline ready)</b>' : ''}. Use <b>Back up</b> on the home screen to keep a copy off the phone. Tip: add the app to your home screen so the phone keeps its data.</p>

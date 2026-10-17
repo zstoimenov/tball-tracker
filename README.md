@@ -18,6 +18,11 @@ through the phone's share sheet.
   is guessed: impossible bases are hidden, Confirm waits until every runner is
   placed, the diamond previews the moves, and Undo takes back the whole play. Later moves (steals, overthrows) by tapping a runner on the diamond.
 - Runs this innings shown live on the scoreboard.
+- Learn the symbols (⋯ menu on the home screen or in a game, off by
+  default): each runner row on Confirm shows that player's sheet box with the
+  marks the move adds in blue (old marks grey) and a short note, e.g. "Arc 1st
+  to 3rd". The Recorded banner shows every box the play changed, including
+  strikeouts and moves made on the diamond. No extra taps.
 - Catches mistakes on the spot: impossible plays are blocked with the reason
   (too many outs, two runners on a base), doubtful ones get an amber check
   (runs on the play that makes the last out), every saved play is repeated in
