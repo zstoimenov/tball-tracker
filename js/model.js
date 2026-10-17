@@ -70,6 +70,7 @@ export function replay(game) {
       bats: 0, // plate appearances so far
       breaks: [], // {inning, player}: diagonal marking first batter of next innings
       last: null, // last batter
+      order1: null, // batting order at the end of the 1st innings; kept after that
     };
   });
   const s = {
@@ -194,6 +195,7 @@ function apply(game, s, ev) {
     s.batters = 0;
     s.halfAllBat = false;
     s.runners = [null, null, null, null];
+    if (s.half === 2) for (const O of s.teams) O.order1 ||= [...O.order];
     if (s.half >= game.innings * 2) s.over = true;
   } else if (ev.t === 'over') {
     T.runs[inning] ||= 0;

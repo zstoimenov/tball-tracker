@@ -1808,6 +1808,15 @@ function nextAfterChange(team, order) {
   return order[0];
 }
 
+// A player back in returns to their 1st innings spot once the order is kept:
+// ahead of the first player who batted after them then. Others go last.
+function backIn(order, p, order1) {
+  const at = order1 ? order1.indexOf(p) : -1;
+  const k = at < 0 ? -1 : order.findIndex((q) => order1.indexOf(q) > at || order1.indexOf(q) < 0);
+  if (k < 0) order.push(p);
+  else order.splice(k, 0, p);
+}
+
 // Batting out of order is picked here too (Bat now on a row): only players
 // who haven't batted this innings and aren't on base, since each gets one
 // box per innings on the sheet. The order carries on after them.
@@ -1829,6 +1838,8 @@ ACTIONS.lineup = async () => {
     const d = drafts[team];
     const color = safeColor(game.teams[team].color, COLORS[team]);
     const batting = team === bt;
+    // After the 1st innings the batting order is kept; only who is in changes.
+    const order1 = state.teams[team].order1;
     const free = batting ? d.order.filter(canBat) : [];
     if (batting && !free.includes(atBat)) atBat = free.includes(nextAfterChange(team, d.order)) ? nextAfterChange(team, d.order) : free[0] ?? null;
     const next = batting ? atBat : d.order.length ? nextAfterChange(team, d.order) : null;
@@ -1849,14 +1860,15 @@ ACTIONS.lineup = async () => {
         <button class="btn small out" data-lu="left" data-k="${k}">Left</button>
         <input class="input bare" data-lu-name="${p}" value="${esc(d.names[p])}" placeholder="#${p + 1}" maxlength="24" enterkeyhint="${k < d.order.length - 1 ? 'next' : 'done'}" aria-label="Player ${p + 1} name">
         ${batCell(p)}
-        <span class="grip" data-grip="${k}" role="button" tabindex="0" aria-label="Drag, or use arrow keys, to move ${esc(d.names[p] || `player ${p + 1}`)}">${ICON.grip}</span>
+        ${order1 ? `<span class="grip off" aria-hidden="true">${ICON.lock}</span>`
+          : `<span class="grip" data-grip="${k}" role="button" tabindex="0" aria-label="Drag, or use arrow keys, to move ${esc(d.names[p] || `player ${p + 1}`)}">${ICON.grip}</span>`}
       </li>`;
     el.querySelector('.bsheet-body').innerHTML = `
       <div class="lu-top">
         <button class="icon-btn sm lu-info ${help ? 'on' : ''}" data-lu="info" aria-expanded="${help}" aria-label="How Lineup works">${ICON.info}</button>
         <div class="segmented thin">${game.teams.map((t, i) => `<button class="${i === team ? 'on' : ''}" data-lu="team" data-t="${i}" style="--team:${safeColor(t.color, COLORS[i])}"><i></i><span class="seg-name">${esc(t.name)}</span></button>`).join('')}</div>
       </div>
-      <p class="muted lu-help" ${help ? '' : 'hidden'}>${batting ? 'Wrong child at the plate? Tap <b>Bat now</b> on who is really batting. ' : ''}Drag ${ICON.grip} to change the order; it applies from the next batter.</p>
+      <p class="muted lu-help" ${help ? '' : 'hidden'}>${batting ? 'Wrong child at the plate? Tap <b>Bat now</b> on who is really batting. ' : ''}${order1 ? 'The batting order from the 1st innings is kept for the rest of the game. Late arrivals bat at the end; a player back in returns to their spot.' : `Drag ${ICON.grip} to change the order; it applies from the next batter. It is kept after the 1st innings.`}</p>
       <ol class="lu-list" id="lu-order">${d.order.map(row).join('')}</ol>
       <div class="add-row"><input class="input" id="lu-new" placeholder="Late arrival: name (optional)" maxlength="24" enterkeyhint="done" autocomplete="off">
         <button class="btn primary" data-lu="add">${ICON.plus}<span class="sr">Add</span></button></div>
@@ -1864,7 +1876,7 @@ ACTIONS.lineup = async () => {
       ${gone.length ? `<h4 class="lu-h">Left the game</h4><ul class="lu-list">${gone.map((p) => `
         <li class="lu-row gone"><span class="num-badge sm" style="--team:${color}">${p + 1}</span><span class="lu-name">${esc(d.names[p] || `#${p + 1}`)}</span>
           <button class="btn small ghost" data-lu="back" data-p="${p}">Back in</button></li>`).join('')}</ul>` : ''}`;
-    makeSortable(el.querySelector('#lu-order'), 0, (from, to) => {
+    if (!order1) makeSortable(el.querySelector('#lu-order'), 0, (from, to) => {
       const o = drafts[team].order;
       o.splice(to, 0, o.splice(from, 1)[0]);
       draw();
@@ -1903,7 +1915,7 @@ ACTIONS.lineup = async () => {
           if (d.order.length === 1) return toast('Keep at least one player in the lineup');
           d.order.splice(k, 1);
         }
-        if (a === 'back') d.order.push(+b.dataset.p);
+        if (a === 'back') backIn(d.order, +b.dataset.p, state.teams[team].order1);
         if (a === 'add') {
           d.names.push(sh.querySelector('#lu-new').value.trim());
           d.order.push(d.names.length - 1);

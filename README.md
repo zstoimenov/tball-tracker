@@ -26,6 +26,9 @@ through the phone's share sheet.
 - Lineup (Score screen): add a late arrival, mark a player who left, or fix the
   order from the next batter on. Saved as one undoable step; recorded plays keep
   their players, and nobody is called twice in an innings.
+- The batting order used in the 1st innings is kept for the rest of the game:
+  Lineup no longer reorders after that. Late arrivals bat at the end and a
+  player back in returns to their spot.
 - Innings over shows who scored and who was out, to check with the umpire.
 - "Everyone bats" (Game options, or Keep going on Innings over) lifts the
   batter limit for the rest of the game. With it on, "No out limit" also stops
