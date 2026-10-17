@@ -30,10 +30,11 @@ through the phone's share sheet.
   Lineup no longer reorders after that. Late arrivals bat at the end and a
   player back in returns to their spot.
 - Innings over shows who scored and who was out, to check with the umpire.
-- "Everyone bats" (Game options, or Keep going on Innings over) lifts the
-  batter limit for the rest of the game. With it on, "No out limit" also stops
-  outs ending the innings; outs are still marked. Either can be switched off
-  at any time, and each change is undoable.
+- Out and batter limits can each be switched off or back on: after any
+  innings ("Next innings rules" on Innings over) or at any time in Game
+  options. The choice is kept until changed again and is undoable. When a
+  limit stops an innings with lineup still to bat, "Keep going this innings"
+  switches it off (asking first for outs). Outs are still marked.
 - "Play another innings" at the end, so the length needn't be fixed up front.
 - Three tabs: Score, Sheet (the paper sheet, fitted to the phone width) and Share.
 - "Innings over, tell the umpire" prompts at the configured limit.

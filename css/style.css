@@ -1181,3 +1181,5 @@ body[data-view="score"] .toast { top: var(--toast-top, calc(env(safe-area-inset-
   .score-screen.phase-confirm .opt { min-height: 26px; font-size: 11.5px; }
   .score-screen > .confirm-bar .confirm-row button.btn { min-height: 38px; font-size: 14.5px; }
 }
+.next-rules { display: grid; gap: 10px; margin: 0 0 14px; }
+.next-rules > small { font-size: 13px; }
