@@ -121,6 +121,29 @@ export function drawCell(ctx, x, y, S, cell, hi) {
   }
 }
 
+function measure(ctx, font, text) {
+  const was = ctx.font;
+  ctx.font = font;
+  const w = ctx.measureText(text).width;
+  ctx.font = was;
+  return w;
+}
+
+// Small padlock, 10px wide, centred on y with its left edge at x.
+function drawLock(ctx, x, y, color) {
+  ctx.save();
+  ctx.fillStyle = color;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.6;
+  ctx.beginPath();
+  ctx.arc(x + 5, y - 2, 3, Math.PI, 0);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.roundRect(x, y - 2, 10, 8, 1.5);
+  ctx.fill();
+  ctx.restore();
+}
+
 function fitText(ctx, text, maxW) {
   if (ctx.measureText(text).width <= maxW) return text;
   while (text.length > 1 && ctx.measureText(text + '…').width > maxW) text = text.slice(0, -1);
@@ -152,7 +175,32 @@ export function drawGrid(ctx, x, y, game, state, team, hi, lay = L) {
     ctx.fill();
     ctx.fillStyle = INK;
   }
-  ctx.fillText(fitText(ctx, T.name, W - 60 - sw), x + sw, y + lay.title / 2 - 2);
+  // After the 1st innings the batting order is locked: a lock and a note
+  // after the name, shortened (or just the lock) when space is tight.
+  const room = W - 60 - sw;
+  let tag = '';
+  let tagW = 0;
+  if (TS.order1) {
+    ctx.font = `12px ${FONT}`;
+    const nameW = Math.min(measure(ctx, `bold 17px ${FONT}`, T.name), room * 0.6);
+    tag = ['Order kept from 1st inn.', '1st inn. order', ''].find((t) => 22 + ctx.measureText(t).width <= room - nameW) ?? '';
+    tagW = 22 + (tag ? ctx.measureText(tag).width : 0);
+    ctx.font = `bold 17px ${FONT}`;
+  }
+  const name = fitText(ctx, T.name, room - tagW);
+  ctx.fillText(name, x + sw, y + lay.title / 2 - 2);
+  if (TS.order1) {
+    const lx = x + sw + ctx.measureText(name).width + 10;
+    const ly = y + lay.title / 2 - 2;
+    drawLock(ctx, lx, ly, FAINT);
+    if (tag) {
+      ctx.fillStyle = '#666';
+      ctx.font = `12px ${FONT}`;
+      ctx.fillText(tag, lx + 14, ly + 1);
+      ctx.fillStyle = INK;
+      ctx.font = `bold 17px ${FONT}`;
+    }
+  }
   ctx.textAlign = 'right';
   ctx.fillText(String(total(TS.runs)), x + W, y + lay.title / 2 - 2);
 
@@ -282,7 +330,8 @@ export function renderSheet(game, state, sigImg) {
   const a = gridSize(game, 0, L, state);
   const b = gridSize(game, 1, L, state);
   const headH = 100;
-  const footH = 150;
+  const locked = state.teams.some((t) => t.order1);
+  const footH = locked ? 166 : 150;
   const W = M * 2 + Math.max(a.w, b.w, 420);
   const H = M + headH + a.h + gap + b.h + footH;
   const scale = 2;
@@ -343,5 +392,9 @@ export function renderSheet(game, state, sigImg) {
   ctx.font = `11px ${FONT}`;
   ctx.fillText('Key: dot = reached base · arc = ran several bases · filled circle = scored', M, fy + 96);
   ctx.fillText('number = out (1st, 2nd, 3rd) · strike marks = struck out · thick line = next batter', M, fy + 112);
+  if (locked) {
+    drawLock(ctx, M, fy + 124, '#666');
+    ctx.fillText('= batting order kept from the 1st innings for the rest of the game', M + 14, fy + 128);
+  }
   return c;
 }
